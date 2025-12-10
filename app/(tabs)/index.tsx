@@ -1,18 +1,85 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
 import { Search } from 'lucide-react-native';
 import { Colors } from '@/constants/colors';
 import { MasonryList } from '@/components/MasonryList';
+import { getNotes } from '@/lib/database';
 import { MOCK_NOTES } from '@/mocks/data';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { Note } from '@/types';
 
 const TABS = ['Follow', 'Explore', 'Nearby'];
+
+interface DBNote {
+  id: string;
+  user_id: string;
+  title: string;
+  content: string | null;
+  images: string[];
+  likes_count: number;
+  collects_count: number;
+  comments_count: number;
+  created_at: string;
+  profiles: {
+    id: string;
+    username: string;
+    display_name: string | null;
+    avatar_url: string | null;
+  };
+}
+
+function transformDBNote(dbNote: DBNote): Note {
+  return {
+    id: dbNote.id,
+    userId: dbNote.user_id,
+    user: {
+      id: dbNote.profiles.id,
+      username: dbNote.profiles.username,
+      avatar: dbNote.profiles.avatar_url || 'https://ui-avatars.com/api/?name=User',
+      followers: 0,
+      following: 0,
+      likes: 0,
+      collects: 0,
+    },
+    title: dbNote.title,
+    description: dbNote.content || '',
+    media: dbNote.images,
+    tags: [],
+    likes: dbNote.likes_count,
+    collects: dbNote.collects_count,
+    commentsCount: dbNote.comments_count,
+    createdAt: dbNote.created_at,
+  };
+}
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [activeTab, setActiveTab] = useState('Explore');
+  const [notes, setNotes] = useState<Note[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadNotes();
+  }, []);
+
+  const loadNotes = async () => {
+    try {
+      setLoading(true);
+      const data = await getNotes(20, 0);
+      if (data && data.length > 0) {
+        setNotes(data.map((n: DBNote) => transformDBNote(n)));
+      } else {
+        setNotes(MOCK_NOTES);
+      }
+    } catch (error) {
+      console.error('Error loading notes:', error);
+      setNotes(MOCK_NOTES);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleSearchPress = () => {
     router.push('/search');
@@ -45,10 +112,18 @@ export default function HomeScreen() {
     </View>
   );
 
+  if (loading) {
+    return (
+      <View style={[styles.container, styles.loadingContainer, { paddingTop: insets.top }]}>
+        <ActivityIndicator size="large" color={Colors.light.tint} />
+      </View>
+    );
+  }
+
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <MasonryList
-        data={MOCK_NOTES}
+        data={notes}
         ListHeaderComponent={renderHeader()}
       />
     </View>
@@ -59,6 +134,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.light.background,
+  },
+  loadingContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   headerContainer: {
     paddingHorizontal: 16,

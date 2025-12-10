@@ -1,24 +1,203 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Dimensions, TextInput, Platform, KeyboardAvoidingView } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, Dimensions, TextInput, Platform, KeyboardAvoidingView, ActivityIndicator, Alert } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { Image } from 'expo-image';
 import { Heart, MessageCircle, Star, Share2, ChevronLeft, Send } from 'lucide-react-native';
 import { Colors } from '@/constants/colors';
-import { MOCK_NOTES, CURRENT_USER } from '@/mocks/data';
+import { MOCK_NOTES } from '@/mocks/data';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Comment } from '@/types';
+import { Comment, Note, User } from '@/types';
+import { useAuth } from '@/context/AuthContext';
+import { getNoteById, getComments, addComment, likeNote, collectNote, checkUserInteractions } from '@/lib/database';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+interface DBComment {
+  id: string;
+  content: string;
+  created_at: string;
+  profiles: {
+    id: string;
+    username: string;
+    avatar_url: string | null;
+  };
+}
 
 export default function NoteDetailScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
   
-  const note = MOCK_NOTES.find(n => n.id === id);
+  const [note, setNote] = useState<Note | null>(null);
+  const [loading, setLoading] = useState(true);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [commentText, setCommentText] = useState('');
-  const [comments, setComments] = useState<Comment[]>([]); // Mock comments locally for now
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [isLiked, setIsLiked] = useState(false);
+  const [isCollected, setIsCollected] = useState(false);
+  const [likesCount, setLikesCount] = useState(0);
+  const [collectsCount, setCollectsCount] = useState(0);
+
+  useEffect(() => {
+    loadNote();
+  }, [id]);
+
+  const loadNote = async () => {
+    try {
+      setLoading(true);
+      const data = await getNoteById(id as string);
+      if (data) {
+        const transformedNote: Note = {
+          id: data.id,
+          userId: data.user_id,
+          user: {
+            id: data.profiles.id,
+            username: data.profiles.username,
+            avatar: data.profiles.avatar_url || 'https://ui-avatars.com/api/?name=User',
+            followers: data.profiles.followers_count || 0,
+            following: 0,
+            likes: 0,
+            collects: 0,
+          },
+          title: data.title,
+          description: data.content || '',
+          media: data.images || [],
+          tags: [],
+          likes: data.likes_count,
+          collects: data.collects_count,
+          commentsCount: data.comments_count,
+          createdAt: data.created_at,
+          location: data.location,
+        };
+        setNote(transformedNote);
+        setLikesCount(data.likes_count);
+        setCollectsCount(data.collects_count);
+        
+        const dbComments = await getComments(data.id);
+        if (dbComments) {
+          setComments(dbComments.map((c: DBComment) => ({
+            id: c.id,
+            noteId: data.id,
+            user: {
+              id: c.profiles.id,
+              username: c.profiles.username,
+              avatar: c.profiles.avatar_url || 'https://ui-avatars.com/api/?name=User',
+              followers: 0,
+              following: 0,
+              likes: 0,
+              collects: 0,
+            },
+            text: c.content,
+            createdAt: c.created_at,
+          })));
+        }
+        
+        if (user) {
+          const interactions = await checkUserInteractions(user.id, data.id);
+          setIsLiked(interactions.isLiked);
+          setIsCollected(interactions.isCollected);
+        }
+      } else {
+        const mockNote = MOCK_NOTES.find(n => n.id === id);
+        setNote(mockNote || null);
+        if (mockNote) {
+          setLikesCount(mockNote.likes);
+          setCollectsCount(mockNote.collects);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading note:', error);
+      const mockNote = MOCK_NOTES.find(n => n.id === id);
+      setNote(mockNote || null);
+      if (mockNote) {
+        setLikesCount(mockNote.likes);
+        setCollectsCount(mockNote.collects);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleScroll = (event: any) => {
+    const slideSize = event.nativeEvent.layoutMeasurement.width;
+    const index = event.nativeEvent.contentOffset.x / slideSize;
+    const roundIndex = Math.round(index);
+    setActiveImageIndex(roundIndex);
+  };
+
+  const handleAddComment = async () => {
+    if (!commentText.trim()) return;
+    if (!user) {
+      Alert.alert('Sign In Required', 'Please sign in to comment');
+      return;
+    }
+    if (!note) return;
+    
+    try {
+      const newComment = await addComment(user.id, note.id, commentText.trim());
+      if (newComment) {
+        setComments([{
+          id: newComment.id,
+          noteId: note.id,
+          user: {
+            id: newComment.profiles.id,
+            username: newComment.profiles.username,
+            avatar: newComment.profiles.avatar_url || 'https://ui-avatars.com/api/?name=User',
+            followers: 0,
+            following: 0,
+            likes: 0,
+            collects: 0,
+          },
+          text: newComment.content,
+          createdAt: newComment.created_at,
+        }, ...comments]);
+      }
+      setCommentText('');
+    } catch (error) {
+      console.error('Error adding comment:', error);
+    }
+  };
+
+  const handleLike = async () => {
+    if (!user) {
+      Alert.alert('Sign In Required', 'Please sign in to like this note');
+      return;
+    }
+    if (!note) return;
+    
+    try {
+      const liked = await likeNote(user.id, note.id);
+      setIsLiked(liked);
+      setLikesCount(prev => liked ? prev + 1 : prev - 1);
+    } catch (error) {
+      console.error('Error liking note:', error);
+    }
+  };
+
+  const handleCollect = async () => {
+    if (!user) {
+      Alert.alert('Sign In Required', 'Please sign in to collect this note');
+      return;
+    }
+    if (!note) return;
+    
+    try {
+      const collected = await collectNote(user.id, note.id);
+      setIsCollected(collected);
+      setCollectsCount(prev => collected ? prev + 1 : prev - 1);
+    } catch (error) {
+      console.error('Error collecting note:', error);
+    }
+  };
+
+  if (loading) {
+    return (
+      <View style={[styles.container, styles.loadingContainer]}>
+        <ActivityIndicator size="large" color={Colors.light.tint} />
+      </View>
+    );
+  }
 
   if (!note) {
     return (
@@ -28,33 +207,10 @@ export default function NoteDetailScreen() {
     );
   }
 
-  const handleScroll = (event: any) => {
-    const slideSize = event.nativeEvent.layoutMeasurement.width;
-    const index = event.nativeEvent.contentOffset.x / slideSize;
-    const roundIndex = Math.round(index);
-    setActiveImageIndex(roundIndex);
-  };
-
-  const handleAddComment = () => {
-    if (!commentText.trim()) return;
-    
-    const newComment: Comment = {
-      id: Math.random().toString(),
-      noteId: note.id,
-      user: CURRENT_USER,
-      text: commentText,
-      createdAt: new Date().toISOString(),
-    };
-    
-    setComments([newComment, ...comments]);
-    setCommentText('');
-  };
-
   return (
     <View style={styles.container}>
       <Stack.Screen options={{ headerShown: false }} />
       
-      {/* Custom Header */}
       <View style={[styles.header, { paddingTop: insets.top }]}>
         <PressableIcon onPress={() => router.back()}>
           <ChevronLeft size={28} color={Colors.light.text} />
@@ -71,7 +227,6 @@ export default function NoteDetailScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 100 }}
       >
-        {/* Image Carousel */}
         <View style={styles.carouselContainer}>
           <ScrollView
             horizontal
@@ -108,7 +263,6 @@ export default function NoteDetailScreen() {
         <View style={styles.contentContainer}>
           <Text style={styles.title}>{note.title}</Text>
           
-          {/* User Info */}
           <View style={styles.userInfo}>
             <Image
               source={{ uri: note.user.avatar }}
@@ -137,13 +291,10 @@ export default function NoteDetailScreen() {
              {new Date(note.createdAt).toLocaleDateString()} {note.location ? `• ${note.location}` : ''}
           </Text>
 
-          {/* Divider */}
           <View style={styles.divider} />
           
-          {/* Comments Section Header */}
-          <Text style={styles.commentsTitle}>Comments ({comments.length + note.commentsCount})</Text>
+          <Text style={styles.commentsTitle}>Comments ({comments.length})</Text>
 
-          {/* Mock Existing Comments */}
           {comments.map(comment => (
             <View key={comment.id} style={styles.commentItem}>
               <Image source={{ uri: comment.user.avatar }} style={styles.commentAvatar} />
@@ -154,14 +305,12 @@ export default function NoteDetailScreen() {
             </View>
           ))}
           
-          {/* Placeholder for no comments */}
           {comments.length === 0 && (
             <Text style={styles.noComments}>Be the first to comment!</Text>
           )}
         </View>
       </ScrollView>
 
-      {/* Bottom Interaction Bar */}
       <KeyboardAvoidingView 
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
@@ -182,19 +331,19 @@ export default function NoteDetailScreen() {
         </View>
         
         <View style={styles.actions}>
-          <PressableIcon style={styles.actionButton}>
-            <Heart size={24} color={Colors.light.text} />
-            <Text style={styles.actionText}>{note.likes}</Text>
+          <PressableIcon style={styles.actionButton} onPress={handleLike}>
+            <Heart size={24} color={isLiked ? Colors.light.tint : Colors.light.text} fill={isLiked ? Colors.light.tint : 'none'} />
+            <Text style={styles.actionText}>{likesCount}</Text>
           </PressableIcon>
           
-          <PressableIcon style={styles.actionButton}>
-            <Star size={24} color={Colors.light.text} />
-            <Text style={styles.actionText}>{note.collects}</Text>
+          <PressableIcon style={styles.actionButton} onPress={handleCollect}>
+            <Star size={24} color={isCollected ? '#FFD700' : Colors.light.text} fill={isCollected ? '#FFD700' : 'none'} />
+            <Text style={styles.actionText}>{collectsCount}</Text>
           </PressableIcon>
           
           <PressableIcon style={styles.actionButton}>
             <MessageCircle size={24} color={Colors.light.text} />
-            <Text style={styles.actionText}>{note.commentsCount}</Text>
+            <Text style={styles.actionText}>{comments.length}</Text>
           </PressableIcon>
         </View>
       </KeyboardAvoidingView>
@@ -213,6 +362,10 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.light.background,
   },
+  loadingContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   header: {
     position: 'absolute',
     top: 0,
@@ -223,8 +376,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingBottom: 10,
-    // Add subtle gradient or background if needed, but keeping it transparent for now
-    // or adding a back button circle background for visibility
   },
   headerRight: {
     flexDirection: 'row',
@@ -376,7 +527,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingTop: 10,
-    height: 80, // Adjustable based on insets
+    height: 80,
   },
   inputContainer: {
     flex: 1,

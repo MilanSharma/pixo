@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, Pressable, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TextInput, Pressable, ScrollView, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Search, ArrowLeft, X } from 'lucide-react-native';
 import { Colors } from '@/constants/colors';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MasonryList } from '@/components/MasonryList';
 import { MOCK_NOTES } from '@/mocks/data';
+import { searchNotes } from '@/lib/database';
+import { Note } from '@/types';
 
 const RECENT_SEARCHES = ['Summer Outfit', 'Cafe Tokyo', 'Minimalist Home', 'Skincare'];
 const TRENDING_SEARCHES = [
@@ -21,32 +23,94 @@ const TRENDING_SEARCHES = [
 
 const TABS = ['All', 'Products', 'Users', 'Locations'];
 
+interface DBNote {
+  id: string;
+  user_id: string;
+  title: string;
+  content: string | null;
+  images: string[];
+  likes_count: number;
+  collects_count: number;
+  comments_count: number;
+  created_at: string;
+  profiles: {
+    id: string;
+    username: string;
+    display_name: string | null;
+    avatar_url: string | null;
+  };
+}
+
+function transformDBNote(dbNote: DBNote): Note {
+  return {
+    id: dbNote.id,
+    userId: dbNote.user_id,
+    user: {
+      id: dbNote.profiles.id,
+      username: dbNote.profiles.username,
+      avatar: dbNote.profiles.avatar_url || 'https://ui-avatars.com/api/?name=User',
+      followers: 0,
+      following: 0,
+      likes: 0,
+      collects: 0,
+    },
+    title: dbNote.title,
+    description: dbNote.content || '',
+    media: dbNote.images,
+    tags: [],
+    likes: dbNote.likes_count,
+    collects: dbNote.collects_count,
+    commentsCount: dbNote.comments_count,
+    createdAt: dbNote.created_at,
+  };
+}
+
 export default function SearchScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [query, setQuery] = useState('');
   const [activeTab, setActiveTab] = useState('All');
   const [isSearching, setIsSearching] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [results, setResults] = useState<Note[]>([]);
 
-  // Filter mock data based on query (simple check)
-  const results = isSearching 
-    ? MOCK_NOTES.filter(n => n.title.toLowerCase().includes(query.toLowerCase()) || n.tags.some(t => t.includes(query.toLowerCase())))
-    : [];
-
-  const handleSearch = () => {
-    if (query.trim()) {
-      setIsSearching(true);
+  const handleSearch = async () => {
+    if (!query.trim()) return;
+    
+    setIsSearching(true);
+    setLoading(true);
+    
+    try {
+      const data = await searchNotes(query);
+      if (data && data.length > 0) {
+        setResults(data.map((n: DBNote) => transformDBNote(n)));
+      } else {
+        const mockResults = MOCK_NOTES.filter(n => 
+          n.title.toLowerCase().includes(query.toLowerCase()) || 
+          n.tags.some(t => t.includes(query.toLowerCase()))
+        );
+        setResults(mockResults);
+      }
+    } catch (error) {
+      console.error('Error searching:', error);
+      const mockResults = MOCK_NOTES.filter(n => 
+        n.title.toLowerCase().includes(query.toLowerCase()) || 
+        n.tags.some(t => t.includes(query.toLowerCase()))
+      );
+      setResults(mockResults);
+    } finally {
+      setLoading(false);
     }
   };
 
   const clearSearch = () => {
     setQuery('');
     setIsSearching(false);
+    setResults([]);
   };
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* Header */}
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} style={styles.backButton}>
           <ArrowLeft size={24} color={Colors.light.text} />
@@ -90,7 +154,7 @@ export default function SearchScreen() {
                   style={styles.pill}
                   onPress={() => {
                     setQuery(item);
-                    setIsSearching(true);
+                    handleSearch();
                   }}
                 >
                   <Text style={styles.pillText}>{item}</Text>
@@ -108,7 +172,7 @@ export default function SearchScreen() {
                   style={styles.trendingItem}
                   onPress={() => {
                     setQuery(item);
-                    setIsSearching(true);
+                    handleSearch();
                   }}
                 >
                   <Text style={[
@@ -145,7 +209,11 @@ export default function SearchScreen() {
             ))}
           </View>
 
-          {results.length > 0 ? (
+          {loading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={Colors.light.tint} />
+            </View>
+          ) : results.length > 0 ? (
             <MasonryList data={results} />
           ) : (
             <View style={styles.emptyState}>
@@ -162,6 +230,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.light.background,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   header: {
     flexDirection: 'row',
@@ -254,7 +327,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   topRank: {
-    color: '#FFD700', // Gold or specific color for top 3
+    color: '#FFD700',
   },
   normalRank: {
     color: '#ccc',

@@ -1,61 +1,129 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
 import { Image } from 'expo-image';
-import { Settings, Share2, Menu } from 'lucide-react-native';
+import { Settings, Share2, Menu, LogOut } from 'lucide-react-native';
 import { Colors } from '@/constants/colors';
 import { MasonryList } from '@/components/MasonryList';
-import { CURRENT_USER, MOCK_NOTES } from '@/mocks/data';
+import { MOCK_NOTES } from '@/mocks/data';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useAuth } from '@/context/AuthContext';
+import { signOut } from '@/lib/auth';
+import { getUserNotes, getUserCollections, getUserLikes } from '@/lib/database';
+import { router } from 'expo-router';
+import { Note } from '@/types';
 
 const TABS = ['Notes', 'Collects', 'Likes'];
 
 export default function MeScreen() {
   const insets = useSafeAreaInsets();
+  const { user, profile, loading: authLoading } = useAuth();
   const [activeTab, setActiveTab] = useState('Notes');
+  const [notes, setNotes] = useState<Note[]>([]);
+  const [collectedNotes, setCollectedNotes] = useState<Note[]>([]);
+  const [likedNotes, setLikedNotes] = useState<Note[]>([]);
+  const [loading, setLoading] = useState(false);
 
-  // Filter notes for the profile
-  const userNotes = MOCK_NOTES.filter(n => n.userId === CURRENT_USER.id);
-  const collectedNotes = MOCK_NOTES.slice(0, 4); // Mock data
-  
-  const displayNotes = activeTab === 'Notes' ? userNotes : collectedNotes;
+  useEffect(() => {
+    if (user) {
+      loadUserData();
+    }
+  }, [user]);
+
+  const loadUserData = async () => {
+    if (!user) return;
+    setLoading(true);
+    try {
+      const [userNotes, userCollections, userLikes] = await Promise.all([
+        getUserNotes(user.id),
+        getUserCollections(user.id),
+        getUserLikes(user.id),
+      ]);
+      setNotes(userNotes || []);
+      setCollectedNotes(userCollections || []);
+      setLikedNotes(userLikes || []);
+    } catch (error) {
+      console.error('Error loading user data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+      router.replace('/auth/login');
+    } catch (error) {
+      console.error('Error signing out:', error);
+    }
+  };
+
+  if (authLoading) {
+    return (
+      <View style={[styles.container, styles.loadingContainer, { paddingTop: insets.top }]}>
+        <ActivityIndicator size="large" color={Colors.light.tint} />
+      </View>
+    );
+  }
+
+  if (!user || !profile) {
+    return (
+      <View style={[styles.container, styles.authContainer, { paddingTop: insets.top }]}>
+        <Text style={styles.authTitle}>Welcome to Pixo</Text>
+        <Text style={styles.authSubtitle}>Sign in to see your profile and posts</Text>
+        <Pressable style={styles.authButton} onPress={() => router.push('/auth/login')}>
+          <Text style={styles.authButtonText}>Sign In</Text>
+        </Pressable>
+        <Pressable style={styles.authLinkButton} onPress={() => router.push('/auth/register')}>
+          <Text style={styles.authLinkText}>Don't have an account? Sign Up</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
+  const displayNotes = activeTab === 'Notes' 
+    ? notes 
+    : activeTab === 'Collects' 
+    ? collectedNotes 
+    : likedNotes;
 
   const renderHeader = () => (
     <View style={styles.headerContainer}>
-      {/* Top Bar */}
       <View style={styles.topBar}>
         <Menu size={24} color={Colors.light.text} />
         <View style={styles.topBarRight}>
           <Share2 size={24} color={Colors.light.text} />
+          <Pressable onPress={handleSignOut}>
+            <LogOut size={24} color={Colors.light.text} />
+          </Pressable>
           <Settings size={24} color={Colors.light.text} />
         </View>
       </View>
 
-      {/* Profile Info */}
       <View style={styles.profileInfo}>
-        <Image source={{ uri: CURRENT_USER.avatar }} style={styles.avatar} />
+        <Image 
+          source={{ uri: profile.avatar_url || 'https://ui-avatars.com/api/?name=User' }} 
+          style={styles.avatar} 
+        />
         <View style={styles.statsContainer}>
            <View style={styles.statItem}>
-             <Text style={styles.statNumber}>{CURRENT_USER.following}</Text>
+             <Text style={styles.statNumber}>{profile.following_count}</Text>
              <Text style={styles.statLabel}>Following</Text>
            </View>
            <View style={styles.statItem}>
-             <Text style={styles.statNumber}>{CURRENT_USER.followers}</Text>
+             <Text style={styles.statNumber}>{profile.followers_count}</Text>
              <Text style={styles.statLabel}>Followers</Text>
            </View>
            <View style={styles.statItem}>
-             <Text style={styles.statNumber}>{CURRENT_USER.likes}</Text>
+             <Text style={styles.statNumber}>{profile.likes_count}</Text>
              <Text style={styles.statLabel}>Likes</Text>
            </View>
         </View>
       </View>
 
       <View style={styles.bioContainer}>
-        <Text style={styles.username}>{CURRENT_USER.username}</Text>
-        <Text style={styles.bio}>{CURRENT_USER.bio}</Text>
-        <View style={styles.tagsRow}>
-          <View style={styles.tag}><Text style={styles.tagText}>♀ 24</Text></View>
-          <View style={styles.tag}><Text style={styles.tagText}>New York</Text></View>
-        </View>
+        <Text style={styles.username}>{profile.display_name || profile.username}</Text>
+        <Text style={styles.handle}>@{profile.username}</Text>
+        {profile.bio && <Text style={styles.bio}>{profile.bio}</Text>}
       </View>
 
       <View style={styles.actionButtons}>
@@ -67,7 +135,6 @@ export default function MeScreen() {
         </Pressable>
       </View>
 
-      {/* Tabs */}
       <View style={styles.tabsRow}>
         {TABS.map((tab) => (
           <Pressable 
@@ -90,10 +157,16 @@ export default function MeScreen() {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      <MasonryList
-        data={displayNotes}
-        ListHeaderComponent={renderHeader()}
-      />
+      {loading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Colors.light.tint} />
+        </View>
+      ) : (
+        <MasonryList
+          data={displayNotes.length > 0 ? displayNotes : MOCK_NOTES.slice(0, 4)}
+          ListHeaderComponent={renderHeader()}
+        />
+      )}
     </View>
   );
 }
@@ -102,6 +175,48 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.light.background,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  authContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 32,
+  },
+  authTitle: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: Colors.light.text,
+    marginBottom: 8,
+  },
+  authSubtitle: {
+    fontSize: 16,
+    color: '#666',
+    marginBottom: 32,
+    textAlign: 'center',
+  },
+  authButton: {
+    backgroundColor: Colors.light.tint,
+    paddingHorizontal: 48,
+    paddingVertical: 14,
+    borderRadius: 24,
+    marginBottom: 16,
+  },
+  authButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  authLinkButton: {
+    padding: 8,
+  },
+  authLinkText: {
+    color: Colors.light.tint,
+    fontSize: 14,
   },
   headerContainer: {
     backgroundColor: Colors.light.background,
@@ -156,33 +271,24 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: 'bold',
     color: Colors.light.text,
-    marginBottom: 4,
+    marginBottom: 2,
+  },
+  handle: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 8,
   },
   bio: {
     fontSize: 14,
     color: Colors.light.text,
     lineHeight: 20,
-    marginBottom: 8,
-  },
-  tagsRow: {
-    flexDirection: 'row',
-    gap: 8,
     marginBottom: 16,
-  },
-  tag: {
-    backgroundColor: '#f0f0f0',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  tagText: {
-    fontSize: 12,
-    color: '#666',
   },
   actionButtons: {
     flexDirection: 'row',
     paddingHorizontal: 20,
     gap: 10,
+    marginTop: 16,
     marginBottom: 20,
   },
   editButton: {

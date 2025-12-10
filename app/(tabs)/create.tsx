@@ -6,17 +6,20 @@ import { Camera, MapPin, X } from 'lucide-react-native';
 import { Colors } from '@/constants/colors';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { useAuth } from '@/context/AuthContext';
+import { uploadMultipleImages } from '@/lib/storage';
+import { createNote } from '@/lib/database';
 
 export default function CreateScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { user } = useAuth();
   const [media, setMedia] = useState<string[]>([]);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [isPublishing, setIsPublishing] = useState(false);
 
   const pickImage = async () => {
-    // No permissions request is necessary for launching the image library
     let result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
@@ -35,7 +38,15 @@ export default function CreateScreen() {
     setMedia(newMedia);
   };
 
-  const handlePublish = () => {
+  const handlePublish = async () => {
+    if (!user) {
+      Alert.alert('Sign In Required', 'Please sign in to create a note', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Sign In', onPress: () => router.push('/auth/login') },
+      ]);
+      return;
+    }
+
     if (media.length === 0) {
       Alert.alert('Error', 'Please add at least one photo');
       return;
@@ -47,9 +58,20 @@ export default function CreateScreen() {
 
     setIsPublishing(true);
     
-    // Simulate API call
-    setTimeout(() => {
-      setIsPublishing(false);
+    try {
+      const imageFiles = media.map((uri, index) => ({
+        uri,
+        filename: `image_${index}.jpg`,
+      }));
+      
+      const uploadedUrls = await uploadMultipleImages(user.id, imageFiles);
+      
+      await createNote(user.id, {
+        title: title.trim(),
+        content: description.trim(),
+        images: uploadedUrls,
+      });
+
       Alert.alert('Success', 'Your note has been published!', [
         { text: 'OK', onPress: () => {
           setMedia([]);
@@ -58,8 +80,26 @@ export default function CreateScreen() {
           router.push('/');
         }}
       ]);
-    }, 1500);
+    } catch (error: any) {
+      console.error('Error publishing note:', error);
+      Alert.alert('Error', error.message || 'Failed to publish note');
+    } finally {
+      setIsPublishing(false);
+    }
   };
+
+  if (!user) {
+    return (
+      <View style={[styles.container, styles.authContainer, { paddingTop: insets.top }]}>
+        <Camera size={64} color="#ccc" />
+        <Text style={styles.authTitle}>Create Your First Note</Text>
+        <Text style={styles.authSubtitle}>Sign in to share your moments with the world</Text>
+        <Pressable style={styles.authButton} onPress={() => router.push('/auth/login')}>
+          <Text style={styles.authButtonText}>Sign In</Text>
+        </Pressable>
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -79,7 +119,6 @@ export default function CreateScreen() {
       </View>
 
       <ScrollView style={styles.content}>
-        {/* Media Picker */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.mediaContainer}>
           {media.map((uri, index) => (
             <View key={index} style={styles.imagePreview}>
@@ -138,6 +177,35 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.light.background,
   },
+  authContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 32,
+  },
+  authTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: Colors.light.text,
+    marginTop: 24,
+    marginBottom: 8,
+  },
+  authSubtitle: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 32,
+  },
+  authButton: {
+    backgroundColor: Colors.light.tint,
+    paddingHorizontal: 48,
+    paddingVertical: 14,
+    borderRadius: 24,
+  },
+  authButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -177,7 +245,7 @@ const styles = StyleSheet.create({
   },
   addMediaButton: {
     width: 100,
-    height: 133, // 3:4 aspect ratio
+    height: 133,
     backgroundColor: '#f0f0f0',
     borderRadius: 8,
     justifyContent: 'center',
