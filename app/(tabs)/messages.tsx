@@ -38,18 +38,14 @@ export default function MessagesScreen() {
   };
 
   const handleChatPress = (chat: any) => {
-    Alert.alert(
-      `Chat with ${chat.user.username}`,
-      'Direct messaging is coming soon!',
-      [{ text: 'OK' }]
-    );
+    router.push(`/chat/${chat.user.id}`);
   };
 
   const renderNotification = ({ item }: any) => {
     let Icon;
     let iconColor;
-    
-    switch(item.type) {
+
+    switch (item.type) {
       case 'like': Icon = Heart; iconColor = Colors.light.tint; break;
       case 'follow': Icon = UserPlus; iconColor = Colors.light.blue; break;
       case 'comment': Icon = MessageCircle; iconColor = Colors.light.secondary; break;
@@ -70,9 +66,9 @@ export default function MessagesScreen() {
           </Text>
           <Text style={styles.timeText}>{item.time}</Text>
         </View>
-        <Image 
-          source={{ uri: 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?q=80&w=100&auto=format&fit=crop' }} 
-          style={styles.notificationImage} 
+        <Image
+          source={{ uri: 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?q=80&w=100&auto=format&fit=crop' }}
+          style={styles.notificationImage}
         />
       </Pressable>
     );
@@ -105,16 +101,16 @@ export default function MessagesScreen() {
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Messages</Text>
       </View>
-      
+
       <View style={styles.tabsRow}>
         {TABS.map((tab) => (
-          <Pressable 
-            key={tab} 
+          <Pressable
+            key={tab}
             onPress={() => setActiveTab(tab)}
             style={styles.tabItem}
           >
             <Text style={[
-              styles.tabText, 
+              styles.tabText,
               activeTab === tab && styles.activeTabText
             ]}>
               {tab}

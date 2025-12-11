@@ -62,19 +62,29 @@ export default function HomeScreen() {
 
   useEffect(() => {
     loadNotes();
-  }, []);
+  }, [activeTab]);
 
   const loadNotes = async () => {
     try {
       setLoading(true);
-      const data = await getNotes(20, 0);
-      if (data && data.length > 0) {
-        setNotes(data.map((n: DBNote) => transformDBNote(n)));
-      } else {
-        setNotes(MOCK_NOTES);
+
+      if (activeTab === 'Explore') {
+        const data = await getNotes(20, 0);
+        if (data && data.length > 0) {
+          setNotes(data.map((n: DBNote) => transformDBNote(n)));
+        } else {
+          setNotes(MOCK_NOTES);
+        }
+      } else if (activeTab === 'Follow') {
+        const followedNotes = MOCK_NOTES.filter(note =>
+          ['u2', 'u3', 'u5'].includes(note.userId)
+        );
+        setNotes(followedNotes);
+      } else if (activeTab === 'Nearby') {
+        const nearbyNotes = MOCK_NOTES.filter(note => !!note.location);
+        setNotes(nearbyNotes);
       }
     } catch (error) {
-      console.error('Error loading notes:', error);
       setNotes(MOCK_NOTES);
     } finally {
       setLoading(false);
@@ -89,13 +99,13 @@ export default function HomeScreen() {
     <View style={styles.headerContainer}>
       <View style={styles.tabsRow}>
         {TABS.map((tab) => (
-          <Pressable 
-            key={tab} 
+          <Pressable
+            key={tab}
             onPress={() => setActiveTab(tab)}
             style={styles.tabItem}
           >
             <Text style={[
-              styles.tabText, 
+              styles.tabText,
               activeTab === tab && styles.activeTabText
             ]}>
               {tab}
@@ -104,7 +114,7 @@ export default function HomeScreen() {
           </Pressable>
         ))}
       </View>
-      
+
       <Pressable style={styles.searchBar} onPress={handleSearchPress}>
         <Search size={18} color="#999" />
         <Text style={styles.searchPlaceholder}>Search for &quot;Summer Outfit&quot;</Text>

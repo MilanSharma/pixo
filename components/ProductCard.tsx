@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, StyleSheet, Pressable, Alert } from 'react-native';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { useRouter } from 'expo-router';
 import { Image } from 'expo-image';
 import { Colors } from '@/constants/colors';
 import { Product } from '@/types';
@@ -9,15 +10,10 @@ interface ProductCardProps {
 }
 
 export const ProductCard = ({ product }: ProductCardProps) => {
+  const router = useRouter();
+
   const handlePress = () => {
-    Alert.alert(
-      product.title,
-      `${product.description}\n\nPrice: $${product.price}\nBrand: ${product.brandName}`,
-      [
-        { text: 'Add to Cart', onPress: () => Alert.alert('Added', 'Product added to cart') },
-        { text: 'Close', style: 'cancel' },
-      ]
-    );
+    router.push(`/product/${product.id}`);
   };
 
   return (
@@ -32,7 +28,7 @@ export const ProductCard = ({ product }: ProductCardProps) => {
           {product.title}
         </Text>
         <Text style={styles.price}>${product.price}</Text>
-        
+
         <View style={styles.brandContainer}>
           <Image
             source={{ uri: product.brandLogo }}
