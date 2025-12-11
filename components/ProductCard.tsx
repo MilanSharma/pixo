@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Alert } from 'react-native';
 import { Image } from 'expo-image';
 import { Colors } from '@/constants/colors';
 import { Product } from '@/types';
@@ -9,8 +9,19 @@ interface ProductCardProps {
 }
 
 export const ProductCard = ({ product }: ProductCardProps) => {
+  const handlePress = () => {
+    Alert.alert(
+      product.title,
+      `${product.description}\n\nPrice: $${product.price}\nBrand: ${product.brandName}`,
+      [
+        { text: 'Add to Cart', onPress: () => Alert.alert('Added', 'Product added to cart') },
+        { text: 'Close', style: 'cancel' },
+      ]
+    );
+  };
+
   return (
-    <Pressable style={styles.container}>
+    <Pressable style={styles.container} onPress={handlePress}>
       <Image
         source={{ uri: product.image }}
         style={styles.image}

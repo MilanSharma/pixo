@@ -1,35 +1,78 @@
-import React from 'react';
-import { View, Text, StyleSheet, FlatList } from 'react-native';
-import { Search, ShoppingBag } from 'lucide-react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, FlatList, TextInput, Pressable, Alert } from 'react-native';
+import { Search, ShoppingBag, X } from 'lucide-react-native';
 import { Colors } from '@/constants/colors';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MOCK_PRODUCTS } from '@/mocks/data';
 import { ProductCard } from '@/components/ProductCard';
+import { Product } from '@/types';
 
 export default function ShopScreen() {
   const insets = useSafeAreaInsets();
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filteredProducts, setFilteredProducts] = useState<Product[]>(MOCK_PRODUCTS);
+
+  const handleSearch = (query: string) => {
+    setSearchQuery(query);
+    if (query.trim()) {
+      const filtered = MOCK_PRODUCTS.filter(p => 
+        p.title.toLowerCase().includes(query.toLowerCase()) ||
+        p.brandName?.toLowerCase().includes(query.toLowerCase())
+      );
+      setFilteredProducts(filtered);
+    } else {
+      setFilteredProducts(MOCK_PRODUCTS);
+    }
+  };
+
+  const clearSearch = () => {
+    setSearchQuery('');
+    setFilteredProducts(MOCK_PRODUCTS);
+  };
+
+  const handleSaleBannerPress = () => {
+    Alert.alert('Summer Sale', 'Check out our special summer deals! Up to 50% off on selected items.');
+  };
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <View style={styles.searchBar}>
           <Search size={18} color="#999" />
-          <Text style={styles.searchText}>Search products</Text>
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search products"
+            placeholderTextColor="#999"
+            value={searchQuery}
+            onChangeText={handleSearch}
+          />
+          {searchQuery.length > 0 && (
+            <Pressable onPress={clearSearch}>
+              <X size={16} color="#999" />
+            </Pressable>
+          )}
         </View>
-        <ShoppingBag size={24} color={Colors.light.text} />
+        <Pressable onPress={() => Alert.alert('Cart', 'Your shopping cart is empty')}>
+          <ShoppingBag size={24} color={Colors.light.text} />
+        </Pressable>
       </View>
 
       <FlatList
-        data={MOCK_PRODUCTS}
+        data={filteredProducts}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => <ProductCard product={item} />}
         numColumns={2}
         contentContainerStyle={styles.listContent}
         columnWrapperStyle={styles.columnWrapper}
         ListHeaderComponent={() => (
-          <View style={styles.banner}>
+          <Pressable style={styles.banner} onPress={handleSaleBannerPress}>
              <Text style={styles.bannerTitle}>Summer Sale</Text>
              <Text style={styles.bannerSubtitle}>Up to 50% off</Text>
+          </Pressable>
+        )}
+        ListEmptyComponent={() => (
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>No products found</Text>
           </View>
         )}
       />
@@ -59,8 +102,10 @@ const styles = StyleSheet.create({
     height: 40,
     gap: 8,
   },
-  searchText: {
-    color: '#999',
+  searchInput: {
+    flex: 1,
+    height: '100%',
+    color: Colors.light.text,
     fontSize: 15,
   },
   listContent: {
@@ -86,5 +131,13 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: Colors.light.text,
     marginTop: 4,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    paddingTop: 40,
+  },
+  emptyText: {
+    color: '#999',
+    fontSize: 16,
   },
 });

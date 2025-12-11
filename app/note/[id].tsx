@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, Dimensions, TextInput, Platform, KeyboardAvoidingView, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Dimensions, TextInput, Platform, KeyboardAvoidingView, ActivityIndicator, Alert, Pressable } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { Image } from 'expo-image';
 import { Heart, MessageCircle, Star, Share2, ChevronLeft, Send } from 'lucide-react-native';
@@ -8,9 +8,15 @@ import { MOCK_NOTES } from '@/mocks/data';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Comment, Note, User } from '@/types';
 import { useAuth } from '@/context/AuthContext';
-import { getNoteById, getComments, addComment, likeNote, collectNote, checkUserInteractions } from '@/lib/database';
+import { getNoteById, getComments, addComment, likeNote, collectNote, checkUserInteractions, followUser } from '@/lib/database';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function isValidUUID(str: string): boolean {
+  return UUID_REGEX.test(str);
+}
 
 interface DBComment {
   id: string;
@@ -36,6 +42,7 @@ export default function NoteDetailScreen() {
   const [comments, setComments] = useState<Comment[]>([]);
   const [isLiked, setIsLiked] = useState(false);
   const [isCollected, setIsCollected] = useState(false);
+  const [isFollowing, setIsFollowing] = useState(false);
   const [likesCount, setLikesCount] = useState(0);
   const [collectsCount, setCollectsCount] = useState(0);
 
@@ -46,7 +53,20 @@ export default function NoteDetailScreen() {
   const loadNote = async () => {
     try {
       setLoading(true);
-      const data = await getNoteById(id as string);
+      const noteId = id as string;
+      
+      if (!isValidUUID(noteId)) {
+        const mockNote = MOCK_NOTES.find(n => n.id === noteId);
+        setNote(mockNote || null);
+        if (mockNote) {
+          setLikesCount(mockNote.likes);
+          setCollectsCount(mockNote.collects);
+        }
+        setLoading(false);
+        return;
+      }
+      
+      const data = await getNoteById(noteId);
       if (data) {
         const transformedNote: Note = {
           id: data.id,
@@ -117,6 +137,28 @@ export default function NoteDetailScreen() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleFollow = async () => {
+    if (!user) {
+      Alert.alert('Sign In Required', 'Please sign in to follow');
+      return;
+    }
+    if (!note || !isValidUUID(note.user.id)) {
+      Alert.alert('Info', 'Follow feature not available for demo content');
+      return;
+    }
+    
+    try {
+      const following = await followUser(user.id, note.user.id);
+      setIsFollowing(following);
+    } catch (error) {
+      console.error('Error following user:', error);
+    }
+  };
+
+  const handleTagPress = (tag: string) => {
+    router.push(`/search?q=${encodeURIComponent(tag)}`);
   };
 
   const handleScroll = (event: any) => {
@@ -201,8 +243,13 @@ export default function NoteDetailScreen() {
 
   if (!note) {
     return (
-      <View style={styles.container}>
-        <Text>Note not found</Text>
+      <View style={[styles.container, styles.loadingContainer]}>
+        <View style={[styles.header, { paddingTop: insets.top }]}>
+          <Pressable onPress={() => router.back()}>
+            <ChevronLeft size={28} color={Colors.light.text} />
+          </Pressable>
+        </View>
+        <Text style={styles.errorText}>Note not found</Text>
       </View>
     );
   }
@@ -212,14 +259,14 @@ export default function NoteDetailScreen() {
       <Stack.Screen options={{ headerShown: false }} />
       
       <View style={[styles.header, { paddingTop: insets.top }]}>
-        <PressableIcon onPress={() => router.back()}>
+        <Pressable onPress={() => router.back()}>
           <ChevronLeft size={28} color={Colors.light.text} />
-        </PressableIcon>
+        </Pressable>
         
         <View style={styles.headerRight}>
-          <PressableIcon>
+          <Pressable>
             <Share2 size={24} color={Colors.light.text} />
-          </PressableIcon>
+          </Pressable>
         </View>
       </View>
 
@@ -274,16 +321,23 @@ export default function NoteDetailScreen() {
                 <Text style={styles.location}>{note.location}</Text>
               )}
             </View>
-            <PressableIcon style={styles.followButton}>
-              <Text style={styles.followButtonText}>Follow</Text>
-            </PressableIcon>
+            <Pressable 
+              style={[styles.followButton, isFollowing && styles.followingButton]} 
+              onPress={handleFollow}
+            >
+              <Text style={[styles.followButtonText, isFollowing && styles.followingButtonText]}>
+                {isFollowing ? 'Following' : 'Follow'}
+              </Text>
+            </Pressable>
           </View>
 
           <Text style={styles.description}>{note.description}</Text>
           
           <View style={styles.tagsContainer}>
             {note.tags.map(tag => (
-              <Text key={tag} style={styles.tag}>#{tag}</Text>
+              <Pressable key={tag} onPress={() => handleTagPress(tag)}>
+                <Text style={styles.tag}>#{tag}</Text>
+              </Pressable>
             ))}
           </View>
           
@@ -324,38 +378,32 @@ export default function NoteDetailScreen() {
             onChangeText={setCommentText}
           />
           {commentText.length > 0 && (
-            <PressableIcon onPress={handleAddComment}>
+            <Pressable onPress={handleAddComment}>
                <Send size={20} color={Colors.light.tint} />
-            </PressableIcon>
+            </Pressable>
           )}
         </View>
         
         <View style={styles.actions}>
-          <PressableIcon style={styles.actionButton} onPress={handleLike}>
+          <Pressable style={styles.actionButton} onPress={handleLike}>
             <Heart size={24} color={isLiked ? Colors.light.tint : Colors.light.text} fill={isLiked ? Colors.light.tint : 'none'} />
             <Text style={styles.actionText}>{likesCount}</Text>
-          </PressableIcon>
+          </Pressable>
           
-          <PressableIcon style={styles.actionButton} onPress={handleCollect}>
+          <Pressable style={styles.actionButton} onPress={handleCollect}>
             <Star size={24} color={isCollected ? '#FFD700' : Colors.light.text} fill={isCollected ? '#FFD700' : 'none'} />
             <Text style={styles.actionText}>{collectsCount}</Text>
-          </PressableIcon>
+          </Pressable>
           
-          <PressableIcon style={styles.actionButton}>
+          <Pressable style={styles.actionButton}>
             <MessageCircle size={24} color={Colors.light.text} />
             <Text style={styles.actionText}>{comments.length}</Text>
-          </PressableIcon>
+          </Pressable>
         </View>
       </KeyboardAvoidingView>
     </View>
   );
 }
-
-const PressableIcon = ({ children, style, onPress }: any) => (
-  <View onTouchEnd={onPress} style={style}>
-    {children}
-  </View>
-);
 
 const styles = StyleSheet.create({
   container: {
@@ -365,6 +413,10 @@ const styles = StyleSheet.create({
   loadingContainer: {
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  errorText: {
+    fontSize: 16,
+    color: '#999',
   },
   header: {
     position: 'absolute',
@@ -446,10 +498,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.light.tint,
   },
+  followingButton: {
+    backgroundColor: Colors.light.tint,
+    borderColor: Colors.light.tint,
+  },
   followButtonText: {
     color: Colors.light.tint,
     fontSize: 12,
     fontWeight: '600',
+  },
+  followingButtonText: {
+    color: '#fff',
   },
   description: {
     fontSize: 15,

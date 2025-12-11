@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TextInput, Pressable, ScrollView, ActivityIndicator } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Search, ArrowLeft, X } from 'lucide-react-native';
 import { Colors } from '@/constants/colors';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -9,7 +9,6 @@ import { MOCK_NOTES } from '@/mocks/data';
 import { searchNotes } from '@/lib/database';
 import { Note } from '@/types';
 
-const RECENT_SEARCHES = ['Summer Outfit', 'Cafe Tokyo', 'Minimalist Home', 'Skincare'];
 const TRENDING_SEARCHES = [
   'OOTD Inspiration',
   'Healthy Recipes',
@@ -68,34 +67,49 @@ function transformDBNote(dbNote: DBNote): Note {
 export default function SearchScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const params = useLocalSearchParams();
   const [query, setQuery] = useState('');
   const [activeTab, setActiveTab] = useState('All');
   const [isSearching, setIsSearching] = useState(false);
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<Note[]>([]);
+  const [recentSearches, setRecentSearches] = useState<string[]>(['Summer Outfit', 'Cafe Tokyo', 'Minimalist Home', 'Skincare']);
 
-  const handleSearch = async () => {
-    if (!query.trim()) return;
+  useEffect(() => {
+    if (params.q) {
+      const searchTerm = params.q as string;
+      setQuery(searchTerm);
+      performSearch(searchTerm);
+    }
+  }, [params.q]);
+
+  const performSearch = async (searchQuery: string) => {
+    if (!searchQuery.trim()) return;
     
     setIsSearching(true);
     setLoading(true);
     
+    if (!recentSearches.includes(searchQuery)) {
+      setRecentSearches(prev => [searchQuery, ...prev.slice(0, 3)]);
+    }
+    
     try {
-      const data = await searchNotes(query);
+      const data = await searchNotes(searchQuery);
       if (data && data.length > 0) {
         setResults(data.map((n: DBNote) => transformDBNote(n)));
       } else {
         const mockResults = MOCK_NOTES.filter(n => 
-          n.title.toLowerCase().includes(query.toLowerCase()) || 
-          n.tags.some(t => t.includes(query.toLowerCase()))
+          n.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
+          n.tags.some(t => t.toLowerCase().includes(searchQuery.toLowerCase())) ||
+          n.description.toLowerCase().includes(searchQuery.toLowerCase())
         );
         setResults(mockResults);
       }
     } catch (error) {
       console.error('Error searching:', error);
       const mockResults = MOCK_NOTES.filter(n => 
-        n.title.toLowerCase().includes(query.toLowerCase()) || 
-        n.tags.some(t => t.includes(query.toLowerCase()))
+        n.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
+        n.tags.some(t => t.toLowerCase().includes(searchQuery.toLowerCase()))
       );
       setResults(mockResults);
     } finally {
@@ -103,10 +117,23 @@ export default function SearchScreen() {
     }
   };
 
+  const handleSearch = () => {
+    performSearch(query);
+  };
+
   const clearSearch = () => {
     setQuery('');
     setIsSearching(false);
     setResults([]);
+  };
+
+  const clearRecentSearches = () => {
+    setRecentSearches([]);
+  };
+
+  const handleQuickSearch = (term: string) => {
+    setQuery(term);
+    performSearch(term);
   };
 
   return (
@@ -125,10 +152,11 @@ export default function SearchScreen() {
             onChangeText={setQuery}
             onSubmitEditing={handleSearch}
             autoFocus
+            returnKeyType="search"
           />
           {query.length > 0 && (
-            <Pressable onPress={clearSearch}>
-              <X size={16} color="#999" />
+            <Pressable onPress={clearSearch} hitSlop={8}>
+              <X size={18} color="#666" />
             </Pressable>
           )}
         </View>
@@ -140,40 +168,36 @@ export default function SearchScreen() {
 
       {!isSearching ? (
         <ScrollView style={styles.content} keyboardShouldPersistTaps="handled">
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Recent Searches</Text>
-              <Pressable>
-                <Text style={styles.clearText} onPress={() => {}}>Clear</Text>
-              </Pressable>
-            </View>
-            <View style={styles.pillsContainer}>
-              {RECENT_SEARCHES.map((item, index) => (
-                <Pressable 
-                  key={index} 
-                  style={styles.pill}
-                  onPress={() => {
-                    setQuery(item);
-                    handleSearch();
-                  }}
-                >
-                  <Text style={styles.pillText}>{item}</Text>
+          {recentSearches.length > 0 && (
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Recent Searches</Text>
+                <Pressable onPress={clearRecentSearches}>
+                  <Text style={styles.clearText}>Clear</Text>
                 </Pressable>
-              ))}
+              </View>
+              <View style={styles.pillsContainer}>
+                {recentSearches.map((item, index) => (
+                  <Pressable 
+                    key={index} 
+                    style={styles.pill}
+                    onPress={() => handleQuickSearch(item)}
+                  >
+                    <Text style={styles.pillText}>{item}</Text>
+                  </Pressable>
+                ))}
+              </View>
             </View>
-          </View>
+          )}
 
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Trending Searches</Text>
-            <View style={styles.trendingContainer}>
+            <View style={styles.trendingList}>
               {TRENDING_SEARCHES.map((item, index) => (
                 <Pressable 
                   key={index} 
                   style={styles.trendingItem}
-                  onPress={() => {
-                    setQuery(item);
-                    handleSearch();
-                  }}
+                  onPress={() => handleQuickSearch(item)}
                 >
                   <Text style={[
                     styles.rank, 
@@ -217,7 +241,7 @@ export default function SearchScreen() {
             <MasonryList data={results} />
           ) : (
             <View style={styles.emptyState}>
-              <Text style={styles.emptyText}>No results found.</Text>
+              <Text style={styles.emptyText}>No results found for "{query}"</Text>
             </View>
           )}
         </View>
@@ -286,10 +310,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     color: Colors.light.text,
+    marginBottom: 12,
   },
   clearText: {
     fontSize: 14,
-    color: '#999',
+    color: Colors.light.tint,
   },
   pillsContainer: {
     flexDirection: 'row',
@@ -297,10 +322,10 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   pill: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     backgroundColor: '#fff',
-    borderRadius: 16,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: '#eee',
   },
@@ -308,33 +333,31 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
   },
-  trendingContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
+  trendingList: {
+    gap: 4,
   },
   trendingItem: {
-    width: '48%',
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 4,
   },
   rank: {
     fontSize: 16,
     fontWeight: 'bold',
-    marginRight: 8,
-    width: 20,
+    marginRight: 12,
+    width: 24,
     textAlign: 'center',
   },
   topRank: {
-    color: '#FFD700',
+    color: Colors.light.tint,
   },
   normalRank: {
-    color: '#ccc',
+    color: '#999',
   },
   trendingText: {
-    fontSize: 14,
-    color: '#333',
+    fontSize: 15,
+    color: Colors.light.text,
   },
   resultsContainer: {
     flex: 1,

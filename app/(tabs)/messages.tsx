@@ -1,18 +1,19 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable, FlatList } from 'react-native';
+import { View, Text, StyleSheet, Pressable, FlatList, Alert } from 'react-native';
 import { Image } from 'expo-image';
 import { Heart, UserPlus, MessageCircle } from 'lucide-react-native';
 import { Colors } from '@/constants/colors';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MOCK_USERS } from '@/mocks/data';
+import { useRouter } from 'expo-router';
 
 const TABS = ['Notifications', 'Chats'];
 
 const MOCK_NOTIFICATIONS = [
-  { id: '1', type: 'like', user: MOCK_USERS[1], text: 'liked your note.', time: '2m' },
+  { id: '1', type: 'like', user: MOCK_USERS[1], text: 'liked your note.', time: '2m', noteId: 'n1' },
   { id: '2', type: 'follow', user: MOCK_USERS[2], text: 'started following you.', time: '1h' },
-  { id: '3', type: 'comment', user: MOCK_USERS[3], text: 'commented: "Love this!"', time: '3h' },
-  { id: '4', type: 'like', user: MOCK_USERS[1], text: 'liked your note.', time: '5h' },
+  { id: '3', type: 'comment', user: MOCK_USERS[3], text: 'commented: "Love this!"', time: '3h', noteId: 'n3' },
+  { id: '4', type: 'like', user: MOCK_USERS[1], text: 'liked your note.', time: '5h', noteId: 'n5' },
 ];
 
 const MOCK_CHATS = [
@@ -23,7 +24,26 @@ const MOCK_CHATS = [
 
 export default function MessagesScreen() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState('Notifications');
+
+  const handleNotificationPress = (notification: any) => {
+    if (notification.type === 'like' || notification.type === 'comment') {
+      if (notification.noteId) {
+        router.push(`/note/${notification.noteId}`);
+      }
+    } else if (notification.type === 'follow') {
+      Alert.alert('User Profile', `${notification.user.username}\n\nFollowers: ${notification.user.followers}\nFollowing: ${notification.user.following}`);
+    }
+  };
+
+  const handleChatPress = (chat: any) => {
+    Alert.alert(
+      `Chat with ${chat.user.username}`,
+      'Direct messaging is coming soon!',
+      [{ text: 'OK' }]
+    );
+  };
 
   const renderNotification = ({ item }: any) => {
     let Icon;
@@ -37,10 +57,10 @@ export default function MessagesScreen() {
     }
 
     return (
-      <View style={styles.notificationItem}>
+      <Pressable style={styles.notificationItem} onPress={() => handleNotificationPress(item)}>
         <View style={styles.avatarContainer}>
           <Image source={{ uri: item.user.avatar }} style={styles.avatar} />
-          <View style={styles.iconBadge}>
+          <View style={[styles.iconBadge, { backgroundColor: iconColor }]}>
             <Icon size={10} color="#fff" fill={iconColor} />
           </View>
         </View>
@@ -54,12 +74,12 @@ export default function MessagesScreen() {
           source={{ uri: 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?q=80&w=100&auto=format&fit=crop' }} 
           style={styles.notificationImage} 
         />
-      </View>
+      </Pressable>
     );
   };
 
   const renderChat = ({ item }: any) => (
-    <View style={styles.chatItem}>
+    <Pressable style={styles.chatItem} onPress={() => handleChatPress(item)}>
       <Image source={{ uri: item.user.avatar }} style={styles.chatAvatar} />
       <View style={styles.chatContent}>
         <View style={styles.chatHeader}>
@@ -77,7 +97,7 @@ export default function MessagesScreen() {
           )}
         </View>
       </View>
-    </View>
+    </Pressable>
   );
 
   return (
