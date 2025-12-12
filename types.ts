@@ -31,6 +31,7 @@ export interface Note {
   commentsCount: number;
   isShoppable?: boolean;
   productId?: string;
+  productTags?: string[];
   location?: string;
   createdAt: string;
 }

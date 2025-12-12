@@ -5,6 +5,7 @@ import React, { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { StatusBar } from "expo-status-bar";
 import { AuthProvider } from "@/context/AuthContext";
+import { CartProvider } from "@/context/CartContext";
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
@@ -17,6 +18,7 @@ function RootLayoutNav() {
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="auth" options={{ headerShown: false }} />
       <Stack.Screen name="note/[id]" options={{ presentation: 'card', headerShown: false }} />
+      <Stack.Screen name="product/[id]" options={{ presentation: 'card', headerShown: false }} />
       <Stack.Screen name="search/index" options={{ presentation: 'modal', headerShown: false }} />
       <Stack.Screen name="+not-found" options={{ title: 'Oops!' }} />
     </Stack>
@@ -31,10 +33,12 @@ export default function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <GestureHandlerRootView style={{ flex: 1 }}>
-          <StatusBar style="dark" />
-          <RootLayoutNav />
-        </GestureHandlerRootView>
+        <CartProvider>
+          <GestureHandlerRootView style={{ flex: 1 }}>
+            <StatusBar style="dark" />
+            <RootLayoutNav />
+          </GestureHandlerRootView>
+        </CartProvider>
       </AuthProvider>
     </QueryClientProvider>
   );

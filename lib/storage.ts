@@ -6,10 +6,22 @@ export async function uploadImage(userId: string, uri: string, filename: string)
   
   const filePath = `${userId}/${Date.now()}_${filename}`;
   
+  // Auto-detect mime type from filename or default to jpeg
+  const ext = filename.split('.').pop()?.toLowerCase();
+  let contentType = 'image/jpeg';
+  if (ext === 'png') contentType = 'image/png';
+  if (ext === 'mp4') contentType = 'video/mp4';
+  if (ext === 'mov') contentType = 'video/quicktime';
+  
+  // Use blob.type if available and valid
+  if (blob.type && blob.type !== 'application/octet-stream') {
+    contentType = blob.type;
+  }
+  
   const { error } = await supabase.storage
     .from('media')
     .upload(filePath, blob, {
-      contentType: blob.type || 'image/jpeg',
+      contentType,
       upsert: false,
     });
 

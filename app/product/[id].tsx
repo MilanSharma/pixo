@@ -1,19 +1,23 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Alert, Share, Platform } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { Image } from 'expo-image';
-import { ArrowLeft, Share, Heart, ShoppingBag } from 'lucide-react-native';
+import { ArrowLeft, Share as ShareIcon, Heart, ShoppingBag } from 'lucide-react-native';
 import { Colors } from '@/constants/colors';
 import { MOCK_PRODUCTS } from '@/mocks/data';
 import { Product } from '@/types';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useCart } from '@/context/CartContext';
 
 export default function ProductDetailScreen() {
     const { id } = useLocalSearchParams();
     const router = useRouter();
     const insets = useSafeAreaInsets();
+    const { addToCart } = useCart();
+    
     const [product, setProduct] = useState<Product | null>(null);
     const [loading, setLoading] = useState(true);
+    const [isSaved, setIsSaved] = useState(false);
 
     useEffect(() => {
         if (id) {
@@ -26,11 +30,62 @@ export default function ProductDetailScreen() {
     }, [id]);
 
     const handleBack = () => {
-        router.back();
+        if (router.canGoBack()) {
+            router.back();
+        } else {
+            router.replace('/(tabs)/shop');
+        }
     };
 
-    const handleBuy = () => {
-        Alert.alert('Success', 'Added to cart!');
+    const handleAddToCart = () => {
+        if (product) {
+            addToCart(product);
+            Alert.alert('Added to Cart', `${product.title} has been added to your cart.`);
+        }
+    };
+
+    const handleBuyNow = () => {
+        if (product) {
+            addToCart(product);
+            Alert.alert(
+                'Proceeding to Checkout', 
+                `Buying ${product.title} now...`,
+                [{ text: 'OK', onPress: () => router.push('/(tabs)/shop') }]
+            );
+        }
+    };
+
+    const handleShare = async () => {
+        if (!product) return;
+        try {
+            const message = `Check out this ${product.title} on Pixo! - $${product.price}`;
+            const url = product.image; // Using image as placeholder link
+            
+            const result = await Share.share({
+                message: Platform.OS === 'ios' ? message : `${message} ${url}`,
+                url: Platform.OS === 'ios' ? url : undefined,
+                title: 'Share Product'
+            });
+
+            if (result.action === Share.dismissedAction) {
+                // dismissed
+            }
+        } catch (error) {
+            // Fallback for environments where Share isn't supported nicely
+            Alert.alert('Share', `Check out ${product.title}!`);
+        }
+    };
+
+    const handleSave = () => {
+        setIsSaved(!isSaved);
+        if (!isSaved) {
+            Alert.alert('Saved', 'Product added to your wishlist.');
+        }
+    };
+
+    const handleGoToShop = () => {
+        // Use replace to jump to the tab without stacking
+        router.replace('/(tabs)/shop');
     };
 
     if (loading) {
@@ -61,14 +116,17 @@ export default function ProductDetailScreen() {
                     <Pressable style={[styles.iconButton, styles.backIcon, { top: insets.top + 10 }]} onPress={handleBack}>
                         <ArrowLeft size={24} color="#000" />
                     </Pressable>
-                    <Pressable style={[styles.iconButton, styles.shareIcon, { top: insets.top + 10 }]}>
-                        <Share size={24} color="#000" />
+                    <Pressable 
+                        style={[styles.iconButton, styles.shareIcon, { top: insets.top + 10 }]} 
+                        onPress={handleShare}
+                    >
+                        <ShareIcon size={24} color="#000" />
                     </Pressable>
                 </View>
 
                 <View style={styles.contentContainer}>
                     <View style={styles.priceRow}>
-                        <Text style={styles.price}>${product.price}</Text>
+                        <Text style={styles.price}>${product.price.toFixed(2)}</Text>
                     </View>
 
                     <Text style={styles.title}>{product.title}</Text>
@@ -88,20 +146,20 @@ export default function ProductDetailScreen() {
 
             <View style={[styles.footer, { paddingBottom: insets.bottom + 10 }]}>
                 <View style={styles.iconActions}>
-                    <Pressable style={styles.footerIcon}>
+                    <Pressable style={styles.footerIcon} onPress={handleGoToShop}>
                         <ShoppingBag size={24} color={Colors.light.text} />
                         <Text style={styles.footerIconText}>Shop</Text>
                     </Pressable>
-                    <Pressable style={styles.footerIcon}>
-                        <Heart size={24} color={Colors.light.text} />
+                    <Pressable style={styles.footerIcon} onPress={handleSave}>
+                        <Heart size={24} color={isSaved ? Colors.light.tint : Colors.light.text} fill={isSaved ? Colors.light.tint : 'none'} />
                         <Text style={styles.footerIconText}>Save</Text>
                     </Pressable>
                 </View>
                 <View style={styles.buttonActions}>
-                    <Pressable style={styles.cartButton} onPress={handleBuy}>
+                    <Pressable style={styles.cartButton} onPress={handleAddToCart}>
                         <Text style={styles.cartButtonText}>Add to Cart</Text>
                     </Pressable>
-                    <Pressable style={styles.buyButton} onPress={handleBuy}>
+                    <Pressable style={styles.buyButton} onPress={handleBuyNow}>
                         <Text style={styles.buyButtonText}>Buy Now</Text>
                     </Pressable>
                 </View>
@@ -220,6 +278,8 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         paddingHorizontal: 16,
         paddingTop: 12,
+        zIndex: 100, // Ensure footer is on top
+        elevation: 10, // For Android
     },
     iconActions: {
         flexDirection: 'row',

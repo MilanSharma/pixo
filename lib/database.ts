@@ -45,6 +45,7 @@ export async function createNote(userId: string, note: {
   images: string[];
   category?: string;
   location?: string;
+  productTags?: string[];
 }) {
   const { data, error } = await supabase
     .from('notes')
@@ -55,6 +56,7 @@ export async function createNote(userId: string, note: {
       images: note.images,
       category: note.category,
       location: note.location,
+      product_tags: note.productTags,
     })
     .select()
     .single();
@@ -181,7 +183,15 @@ export async function addComment(userId: string, noteId: string, content: string
 export async function getUserNotes(userId: string) {
   const { data, error } = await supabase
     .from('notes')
-    .select('*')
+    .select(`
+      *,
+      profiles:user_id (
+        id,
+        username,
+        display_name,
+        avatar_url
+      )
+    `)
     .eq('user_id', userId)
     .order('created_at', { ascending: false });
 
@@ -292,4 +302,74 @@ export async function getProducts(limit = 20) {
 
   if (error) throw error;
   return data;
+}
+
+export async function getChatMessages(userId: string, otherUserId: string) {
+  const { data, error } = await supabase
+    .from('messages')
+    .select('*')
+    .or(`and(sender_id.eq.${userId},receiver_id.eq.${otherUserId}),and(sender_id.eq.${otherUserId},receiver_id.eq.${userId})`)
+    .order('created_at', { ascending: true });
+
+  if (error) throw error;
+  return data;
+}
+
+export async function sendMessage(senderId: string, receiverId: string, content: string) {
+  const { data, error } = await supabase
+    .from('messages')
+    .insert({
+      sender_id: senderId,
+      receiver_id: receiverId,
+      content: content
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function getUserConversations(userId: string) {
+  // Fetch all messages where user is sender or receiver
+  const { data: messages, error } = await supabase
+    .from('messages')
+    .select(`
+      *,
+      sender:sender_id(id, username, avatar_url),
+      receiver:receiver_id(id, username, avatar_url)
+    `)
+    .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+
+  // Group by the "other" user to get the latest message for each conversation
+  const conversationsMap = new Map();
+
+  messages.forEach((msg: any) => {
+    const otherUser = msg.sender_id === userId ? msg.receiver : msg.sender;
+    
+    // Safety check if user relation is missing
+    if (!otherUser) return;
+
+    const otherUserId = otherUser.id;
+
+    if (!conversationsMap.has(otherUserId)) {
+      conversationsMap.set(otherUserId, {
+        id: otherUserId, // Use other user's ID as conversation ID for simplicity in routing
+        user: {
+            id: otherUser.id,
+            username: otherUser.username || 'Unknown',
+            avatar: otherUser.avatar_url || 'https://ui-avatars.com/api/?name=User'
+        },
+        lastMessage: msg.content,
+        time: msg.created_at,
+        unread: 0, // Real unread count would require a separate 'read_at' field logic
+        sender_id: msg.sender_id // to check if last message was from me
+      });
+    }
+  });
+
+  return Array.from(conversationsMap.values());
 }

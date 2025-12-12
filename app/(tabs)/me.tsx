@@ -1,21 +1,48 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ActivityIndicator, Alert, Share, ScrollView } from 'react-native';
 import { Image } from 'expo-image';
-import { Settings, Share2, Menu, LogOut } from 'lucide-react-native';
+import { Settings, Share2, Menu, LogOut, Edit3 } from 'lucide-react-native';
 import { Colors } from '@/constants/colors';
 import { MasonryList } from '@/components/MasonryList';
-import { MOCK_NOTES } from '@/mocks/data';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/context/AuthContext';
-import { signOut } from '@/lib/auth';
 import { getUserNotes, getUserCollections, getUserLikes } from '@/lib/database';
-import { router } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { Note } from '@/types';
 
 const TABS = ['Notes', 'Collects', 'Likes'];
 
+function transformDBNote(dbNote: any): Note {
+  const profile = dbNote.profiles || { id: dbNote.user_id, username: 'Unknown', avatar_url: '' };
+  
+  return {
+    id: dbNote.id,
+    userId: dbNote.user_id,
+    user: {
+      id: profile.id,
+      username: profile.username || 'Unknown',
+      avatar: profile.avatar_url || 'https://ui-avatars.com/api/?name=User',
+      followers: 0,
+      following: 0,
+      likes: 0,
+      collects: 0,
+    },
+    title: dbNote.title,
+    description: dbNote.content || '',
+    media: dbNote.images || [],
+    tags: [],
+    productTags: dbNote.product_tags || [],
+    location: dbNote.location || undefined,
+    likes: dbNote.likes_count || 0,
+    collects: dbNote.collects_count || 0,
+    commentsCount: dbNote.comments_count || 0,
+    createdAt: dbNote.created_at,
+  };
+}
+
 export default function MeScreen() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const { user, profile, loading: authLoading } = useAuth();
   const [activeTab, setActiveTab] = useState('Notes');
   const [notes, setNotes] = useState<Note[]>([]);
@@ -38,9 +65,10 @@ export default function MeScreen() {
         getUserCollections(user.id),
         getUserLikes(user.id),
       ]);
-      setNotes(userNotes || []);
-      setCollectedNotes(userCollections || []);
-      setLikedNotes(userLikes || []);
+      
+      setNotes(userNotes?.map(transformDBNote) || []);
+      setCollectedNotes(userCollections?.map(transformDBNote) || []);
+      setLikedNotes(userLikes?.map(transformDBNote) || []);
     } catch (error) {
       console.error('Error loading user data:', error);
     } finally {
@@ -48,12 +76,26 @@ export default function MeScreen() {
     }
   };
 
-  const handleSignOut = async () => {
+  const handleMenuPress = () => {
+    router.push('/user/menu');
+  };
+
+  const handleSettingsPress = () => {
+    router.push('/user/settings');
+  };
+
+  const handleEditProfile = () => {
+    router.push('/user/edit');
+  };
+
+  const handleShareProfile = async () => {
+    if (!profile) return;
     try {
-      await signOut();
-      router.replace('/auth/login');
+      await Share.share({
+        message: `Check out my profile on Pixo! @${profile.username}`,
+      });
     } catch (error) {
-      console.error('Error signing out:', error);
+      console.error('Error sharing profile:', error);
     }
   };
 
@@ -89,13 +131,16 @@ export default function MeScreen() {
   const renderHeader = () => (
     <View style={styles.headerContainer}>
       <View style={styles.topBar}>
-        <Menu size={24} color={Colors.light.text} />
+        <Pressable onPress={handleMenuPress} style={styles.iconBtn}>
+          <Menu size={24} color={Colors.light.text} />
+        </Pressable>
         <View style={styles.topBarRight}>
-          <Share2 size={24} color={Colors.light.text} />
-          <Pressable onPress={handleSignOut}>
-            <LogOut size={24} color={Colors.light.text} />
+          <Pressable onPress={handleShareProfile} style={styles.iconBtn}>
+            <Share2 size={24} color={Colors.light.text} />
           </Pressable>
-          <Settings size={24} color={Colors.light.text} />
+          <Pressable onPress={handleSettingsPress} style={styles.iconBtn}>
+            <Settings size={24} color={Colors.light.text} />
+          </Pressable>
         </View>
       </View>
 
@@ -127,10 +172,10 @@ export default function MeScreen() {
       </View>
 
       <View style={styles.actionButtons}>
-        <Pressable style={styles.editButton}>
+        <Pressable style={styles.editButton} onPress={handleEditProfile}>
           <Text style={styles.editButtonText}>Edit Profile</Text>
         </Pressable>
-        <Pressable style={styles.editButton}>
+        <Pressable style={styles.editButton} onPress={handleShareProfile}>
           <Text style={styles.editButtonText}>Share Profile</Text>
         </Pressable>
       </View>
@@ -163,8 +208,10 @@ export default function MeScreen() {
         </View>
       ) : (
         <MasonryList
-          data={displayNotes.length > 0 ? displayNotes : MOCK_NOTES.slice(0, 4)}
+          data={displayNotes}
           ListHeaderComponent={renderHeader()}
+          refreshing={loading}
+          onRefresh={loadUserData}
         />
       )}
     </View>
@@ -230,7 +277,10 @@ const styles = StyleSheet.create({
   },
   topBarRight: {
     flexDirection: 'row',
-    gap: 16,
+    gap: 8,
+  },
+  iconBtn: {
+    padding: 8,
   },
   profileInfo: {
     flexDirection: 'row',

@@ -1,38 +1,129 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TextInput, Pressable, KeyboardAvoidingView, Platform } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, FlatList, TextInput, Pressable, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { Image } from 'expo-image';
 import { ArrowLeft, Send } from 'lucide-react-native';
 import { Colors } from '@/constants/colors';
-import { MOCK_USERS } from '@/mocks/data';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useAuth } from '@/context/AuthContext';
+import { getChatMessages, sendMessage } from '@/lib/database';
+import { getProfile } from '@/lib/auth';
+import { supabase } from '@/lib/supabase';
+
+interface Message {
+    id: string;
+    text: string;
+    sender: 'me' | 'them';
+    time: string;
+}
+
+interface UserProfile {
+    id: string;
+    username: string;
+    avatar_url: string | null;
+}
 
 export default function ChatScreen() {
-    const { id } = useLocalSearchParams();
+    const { id } = useLocalSearchParams(); // This is the other user's ID
     const router = useRouter();
     const insets = useSafeAreaInsets();
-    const [messages, setMessages] = useState([
-        { id: 'm1', text: 'Hey, is this still available?', sender: 'me', time: '10:00 AM' },
-        { id: 'm2', text: 'Yes, it is!', sender: 'them', time: '10:05 AM' },
-        { id: 'm3', text: 'Great, I would like to buy it.', sender: 'me', time: '10:06 AM' },
-    ]);
+    const { user } = useAuth();
+    
+    const [messages, setMessages] = useState<Message[]>([]);
     const [inputText, setInputText] = useState('');
+    const [otherUser, setOtherUser] = useState<UserProfile | null>(null);
+    const [loading, setLoading] = useState(true);
+    const flatListRef = useRef<FlatList>(null);
 
-    const user = MOCK_USERS.find(u => u.id === id) || MOCK_USERS[1];
+    const otherUserId = Array.isArray(id) ? id[0] : id;
 
-    const handleSend = () => {
-        if (inputText.trim()) {
-            setMessages([...messages, {
-                id: Date.now().toString(),
-                text: inputText,
-                sender: 'me',
-                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-            }]);
-            setInputText('');
+    useEffect(() => {
+        if (!user || !otherUserId) return;
+
+        // 1. Fetch the other user's profile
+        getProfile(otherUserId).then((data) => {
+            setOtherUser(data);
+        }).catch((err) => console.error("Error fetching user profile:", err));
+
+        // 2. Initial fetch of messages
+        fetchMessages();
+
+        // 3. Set up Realtime subscription
+        const channel = supabase.channel(`chat:${user.id}:${otherUserId}`)
+            .on(
+                'postgres_changes',
+                {
+                    event: 'INSERT',
+                    schema: 'public',
+                    table: 'messages',
+                    filter: `receiver_id=eq.${user.id}`, 
+                },
+                (payload) => {
+                    // Check if the message is from the person we are currently chatting with
+                    if (payload.new.sender_id === otherUserId) {
+                        const newMessage: Message = {
+                            id: payload.new.id,
+                            text: payload.new.content,
+                            sender: 'them',
+                            time: new Date(payload.new.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                        };
+                        setMessages((prev) => [...prev, newMessage]);
+                    }
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [user, otherUserId]);
+
+    const fetchMessages = async () => {
+        if (!user || !otherUserId) return;
+        try {
+            const data = await getChatMessages(user.id, otherUserId);
+            if (data) {
+                const mappedMessages: Message[] = data.map((m: any) => ({
+                    id: m.id,
+                    text: m.content,
+                    sender: m.sender_id === user.id ? 'me' : 'them',
+                    time: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                }));
+                setMessages(mappedMessages);
+            }
+        } catch (error) {
+            console.error('Error fetching messages:', error);
+        } finally {
+            setLoading(false);
         }
     };
 
-    const renderItem = ({ item }: any) => (
+    const handleSend = async () => {
+        if (!inputText.trim() || !user || !otherUserId) return;
+
+        const content = inputText.trim();
+        setInputText(''); // Clear input immediately for better UX
+
+        // Optimistic update
+        const optimisticMsg: Message = {
+            id: Date.now().toString(),
+            text: content,
+            sender: 'me',
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        };
+        setMessages((prev) => [...prev, optimisticMsg]);
+
+        try {
+            await sendMessage(user.id, otherUserId, content);
+            // We don't strictly need to replace the optimistic message if the order is preserved,
+            // but fetching or confirming ID is often good practice. For now, we rely on the optimistic push.
+        } catch (error) {
+            console.error('Error sending message:', error);
+            // Optionally remove the optimistic message on failure
+        }
+    };
+
+    const renderItem = ({ item }: { item: Message }) => (
         <View style={[
             styles.messageContainer,
             item.sender === 'me' ? styles.myMessage : styles.theirMessage
@@ -43,7 +134,10 @@ export default function ChatScreen() {
             ]}>
                 {item.text}
             </Text>
-            <Text style={styles.timeText}>{item.time}</Text>
+            <Text style={[
+                styles.timeText,
+                item.sender === 'me' ? styles.myTimeText : styles.theirTimeText
+            ]}>{item.time}</Text>
         </View>
     );
 
@@ -52,20 +146,35 @@ export default function ChatScreen() {
             <Stack.Screen options={{ headerShown: false }} />
 
             <View style={styles.header}>
-                <Pressable onPress={() => router.back()} style={styles.backButton}>
+                <Pressable onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)/messages')} style={styles.backButton}>
                     <ArrowLeft size={24} color={Colors.light.text} />
                 </Pressable>
-                <Image source={{ uri: user.avatar }} style={styles.avatar} />
-                <Text style={styles.headerTitle}>{user.username}</Text>
+                {otherUser && (
+                    <>
+                        <Image 
+                            source={{ uri: otherUser.avatar_url || 'https://ui-avatars.com/api/?name=' + otherUser.username }} 
+                            style={styles.avatar} 
+                        />
+                        <Text style={styles.headerTitle}>{otherUser.username}</Text>
+                    </>
+                )}
             </View>
 
-            <FlatList
-                data={messages}
-                keyExtractor={item => item.id}
-                renderItem={renderItem}
-                contentContainerStyle={styles.listContent}
-                inverted={false}
-            />
+            {loading ? (
+                <View style={styles.loadingContainer}>
+                    <ActivityIndicator size="small" color={Colors.light.tint} />
+                </View>
+            ) : (
+                <FlatList
+                    ref={flatListRef}
+                    data={messages}
+                    keyExtractor={item => item.id}
+                    renderItem={renderItem}
+                    contentContainerStyle={styles.listContent}
+                    onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
+                    onLayout={() => flatListRef.current?.scrollToEnd({ animated: true })}
+                />
+            )}
 
             <KeyboardAvoidingView
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -79,7 +188,7 @@ export default function ChatScreen() {
                         onChangeText={setInputText}
                         multiline
                     />
-                    <Pressable onPress={handleSend} style={styles.sendButton}>
+                    <Pressable onPress={handleSend} style={styles.sendButton} disabled={!inputText.trim()}>
                         <Send size={20} color="#fff" />
                     </Pressable>
                 </View>
@@ -114,8 +223,14 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
         color: '#000',
     },
+    loadingContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
     listContent: {
         padding: 16,
+        paddingBottom: 20,
     },
     messageContainer: {
         maxWidth: '80%',
@@ -146,9 +261,13 @@ const styles = StyleSheet.create({
     timeText: {
         fontSize: 10,
         marginTop: 4,
-        opacity: 0.7,
         alignSelf: 'flex-end',
-        color: 'inherit',
+    },
+    myTimeText: {
+        color: 'rgba(255,255,255,0.7)',
+    },
+    theirTimeText: {
+        color: '#999',
     },
     inputContainer: {
         flexDirection: 'row',

@@ -6,11 +6,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MOCK_PRODUCTS } from '@/mocks/data';
 import { ProductCard } from '@/components/ProductCard';
 import { Product } from '@/types';
+import { useCart } from '@/context/CartContext';
 
 export default function ShopScreen() {
   const insets = useSafeAreaInsets();
   const [searchQuery, setSearchQuery] = useState('');
   const [filteredProducts, setFilteredProducts] = useState<Product[]>(MOCK_PRODUCTS);
+  const { count, total, items } = useCart();
 
   const handleSearch = (query: string) => {
     setSearchQuery(query);
@@ -34,6 +36,22 @@ export default function ShopScreen() {
     Alert.alert('Summer Sale', 'Check out our special summer deals! Up to 50% off on selected items.');
   };
 
+  const handleCartPress = () => {
+    if (count === 0) {
+      Alert.alert('Cart', 'Your shopping cart is empty');
+    } else {
+      const itemList = items.map(i => `${i.quantity}x ${i.title}`).join('\n');
+      Alert.alert(
+        'Your Cart',
+        `${itemList}\n\nTotal: $${total.toFixed(2)}`,
+        [
+          { text: 'Close', style: 'cancel' },
+          { text: 'Checkout', onPress: () => Alert.alert('Checkout', 'Proceeding to checkout...') }
+        ]
+      );
+    }
+  };
+
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
@@ -52,8 +70,13 @@ export default function ShopScreen() {
             </Pressable>
           )}
         </View>
-        <Pressable onPress={() => Alert.alert('Cart', 'Your shopping cart is empty')}>
+        <Pressable onPress={handleCartPress} style={styles.cartContainer}>
           <ShoppingBag size={24} color={Colors.light.text} />
+          {count > 0 && (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{count > 99 ? '99+' : count}</Text>
+            </View>
+          )}
         </Pressable>
       </View>
 
@@ -107,6 +130,27 @@ const styles = StyleSheet.create({
     height: '100%',
     color: Colors.light.text,
     fontSize: 15,
+  },
+  cartContainer: {
+    position: 'relative',
+    padding: 4,
+  },
+  badge: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    backgroundColor: Colors.light.tint,
+    borderRadius: 10,
+    minWidth: 16,
+    height: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 3,
+  },
+  badgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: 'bold',
   },
   listContent: {
     padding: 10,

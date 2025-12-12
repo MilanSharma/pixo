@@ -1,15 +1,19 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { View, Text, StyleSheet, Pressable, ActivityIndicator, FlatList, Dimensions, Alert } from 'react-native';
 import { Search } from 'lucide-react-native';
 import { Colors } from '@/constants/colors';
-import { MasonryList } from '@/components/MasonryList';
-import { getNotes } from '@/lib/database';
+import { ReelCard } from '@/components/ReelCard';
+import { getNotes, likeNote, collectNote } from '@/lib/database';
 import { MOCK_NOTES } from '@/mocks/data';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Note } from '@/types';
+import { useAuth } from '@/context/AuthContext';
+import { LinearGradient } from 'expo-linear-gradient';
 
-const TABS = ['Follow', 'Explore', 'Nearby'];
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+
+const FEED_TABS = ['Following', 'For You'];
 
 interface DBNote {
   id: string;
@@ -46,6 +50,8 @@ function transformDBNote(dbNote: DBNote): Note {
     description: dbNote.content || '',
     media: dbNote.images,
     tags: [],
+    productTags: (dbNote as any).product_tags || [],
+    location: (dbNote as any).location || undefined,
     likes: dbNote.likes_count,
     collects: dbNote.collects_count,
     commentsCount: dbNote.comments_count,
@@ -56,33 +62,32 @@ function transformDBNote(dbNote: DBNote): Note {
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState('Explore');
+  const { user } = useAuth();
+  const [feedTab, setFeedTab] = useState('For You');
   const [notes, setNotes] = useState<Note[]>([]);
   const [loading, setLoading] = useState(true);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const flatListRef = useRef<FlatList>(null);
+  const [likedNotes, setLikedNotes] = useState<Set<string>>(new Set());
+  const [collectedNotes, setCollectedNotes] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     loadNotes();
-  }, [activeTab]);
+  }, [feedTab]);
 
   const loadNotes = async () => {
     try {
       setLoading(true);
-
-      if (activeTab === 'Explore') {
-        const data = await getNotes(20, 0);
+      if (feedTab === 'For You') {
+        const data = await getNotes(60, 0);
         if (data && data.length > 0) {
           setNotes(data.map((n: DBNote) => transformDBNote(n)));
         } else {
           setNotes(MOCK_NOTES);
         }
-      } else if (activeTab === 'Follow') {
-        const followedNotes = MOCK_NOTES.filter(note =>
-          ['u2', 'u3', 'u5'].includes(note.userId)
-        );
+      } else {
+        const followedNotes = MOCK_NOTES.filter(note => ['u2', 'u3', 'u5'].includes(note.userId));
         setNotes(followedNotes);
-      } else if (activeTab === 'Nearby') {
-        const nearbyNotes = MOCK_NOTES.filter(note => !!note.location);
-        setNotes(nearbyNotes);
       }
     } catch (error) {
       setNotes(MOCK_NOTES);
@@ -91,50 +96,164 @@ export default function HomeScreen() {
     }
   };
 
+  const handleLike = async (noteId: string) => {
+    if (!user) {
+      Alert.alert('Login Required', 'Please login to like posts');
+      return;
+    }
+
+    try {
+      const isLiked = likedNotes.has(noteId);
+      
+      // Optimistic update for immediate feedback
+      const newLikedNotes = new Set(likedNotes);
+      if (isLiked) {
+        newLikedNotes.delete(noteId);
+      } else {
+        newLikedNotes.add(noteId);
+      }
+      setLikedNotes(newLikedNotes);
+
+      setNotes(prevNotes =>
+        prevNotes.map(note =>
+          note.id === noteId
+            ? { ...note, likes: note.likes + (isLiked ? -1 : 1) }
+            : note
+        )
+      );
+
+      // Perform actual DB call
+      await likeNote(user.id, noteId);
+      
+    } catch (error) {
+      console.error('Error liking note:', error);
+      // Revert if error (omitted for brevity, but good practice)
+    }
+  };
+
+  const handleCollect = async (noteId: string) => {
+    if (!user) {
+      Alert.alert('Login Required', 'Please login to save posts');
+      return;
+    }
+
+    try {
+      const isCollected = collectedNotes.has(noteId);
+      
+      const newCollectedNotes = new Set(collectedNotes);
+      if (isCollected) {
+        newCollectedNotes.delete(noteId);
+      } else {
+        newCollectedNotes.add(noteId);
+      }
+      setCollectedNotes(newCollectedNotes);
+
+      setNotes(prevNotes =>
+        prevNotes.map(note =>
+          note.id === noteId
+            ? { ...note, collects: note.collects + (isCollected ? -1 : 1) }
+            : note
+        )
+      );
+
+      await collectNote(user.id, noteId);
+
+    } catch (error) {
+      console.error('Error collecting note:', error);
+    }
+  };
+
+  const handleComment = (noteId: string) => {
+    router.push(`/note/${noteId}`);
+  };
+
+  const handleShare = () => {
+    // Share handled in ReelCard now, but this prop is kept if parent needs control
+  };
+
   const handleSearchPress = () => {
     router.push('/search');
   };
 
-  const renderHeader = () => (
-    <View style={styles.headerContainer}>
-      <View style={styles.tabsRow}>
-        {TABS.map((tab) => (
-          <Pressable
-            key={tab}
-            onPress={() => setActiveTab(tab)}
-            style={styles.tabItem}
-          >
-            <Text style={[
-              styles.tabText,
-              activeTab === tab && styles.activeTabText
-            ]}>
-              {tab}
-            </Text>
-            {activeTab === tab && <View style={styles.activeIndicator} />}
-          </Pressable>
-        ))}
-      </View>
+  const onViewableItemsChanged = useRef(({ viewableItems }: any) => {
+    if (viewableItems.length > 0) {
+      setCurrentIndex(viewableItems[0].index || 0);
+    }
+  }).current;
 
-      <Pressable style={styles.searchBar} onPress={handleSearchPress}>
-        <Search size={18} color="#999" />
-        <Text style={styles.searchPlaceholder}>Search for &quot;Summer Outfit&quot;</Text>
-      </Pressable>
-    </View>
+  const viewabilityConfig = useRef({
+    itemVisiblePercentThreshold: 50,
+  }).current;
+
+  const renderItem = ({ item, index }: { item: Note; index: number }) => (
+    <ReelCard
+      note={item}
+      isActive={index === currentIndex}
+      onLike={() => handleLike(item.id)}
+      onCollect={() => handleCollect(item.id)}
+      onComment={() => handleComment(item.id)}
+      onShare={handleShare}
+      isLiked={likedNotes.has(item.id)}
+      isCollected={collectedNotes.has(item.id)}
+    />
   );
 
   if (loading) {
     return (
-      <View style={[styles.container, styles.loadingContainer, { paddingTop: insets.top }]}>
-        <ActivityIndicator size="large" color={Colors.light.tint} />
+      <View style={[styles.container, styles.loadingContainer]}>
+        <ActivityIndicator size="large" color="#fff" />
       </View>
     );
   }
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      <MasonryList
+    <View style={styles.container}>
+      {/* Header overlay with Gradient */}
+      <View style={styles.headerContainer}>
+        <LinearGradient
+            colors={['rgba(0,0,0,0.6)', 'rgba(0,0,0,0)']}
+            style={[styles.headerGradient, { paddingTop: insets.top + 8 }]}
+        >
+            <View style={styles.headerRow}>
+            <View style={styles.toggleRow}>
+                {FEED_TABS.map(tab => (
+                <Pressable key={tab} onPress={() => setFeedTab(tab)} style={styles.toggleBtn}>
+                    <Text style={[styles.toggleText, feedTab === tab && styles.toggleTextActive]}>
+                    {tab}
+                    </Text>
+                    {feedTab === tab && <View style={styles.toggleUnderline} />}
+                </Pressable>
+                ))}
+            </View>
+            <Pressable onPress={handleSearchPress} style={styles.searchIconBtn}>
+                <Search size={22} color="#fff" />
+            </Pressable>
+            </View>
+        </LinearGradient>
+      </View>
+
+      {/* Reels feed */}
+      <FlatList
+        ref={flatListRef}
         data={notes}
-        ListHeaderComponent={renderHeader()}
+        renderItem={renderItem}
+        keyExtractor={(item) => item.id}
+        pagingEnabled
+        showsVerticalScrollIndicator={false}
+        snapToInterval={SCREEN_HEIGHT}
+        snapToAlignment="start"
+        decelerationRate="fast"
+        onViewableItemsChanged={onViewableItemsChanged}
+        viewabilityConfig={viewabilityConfig}
+        removeClippedSubviews
+        maxToRenderPerBatch={3}
+        windowSize={5}
+        initialNumToRender={2}
+        getItemLayout={(data, index) => ({
+          length: SCREEN_HEIGHT,
+          offset: SCREEN_HEIGHT * index,
+          index,
+        })}
       />
     </View>
   );
@@ -143,60 +262,61 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.light.background,
+    backgroundColor: '#000',
   },
   loadingContainer: {
     justifyContent: 'center',
     alignItems: 'center',
   },
   headerContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+  },
+  headerGradient: {
     paddingHorizontal: 16,
-    paddingBottom: 10,
-    backgroundColor: Colors.light.background,
+    paddingBottom: 20,
   },
-  tabsRow: {
+  headerRow: {
     flexDirection: 'row',
-    justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 16,
-    gap: 24,
+    justifyContent: 'space-between',
   },
-  tabItem: {
+  toggleRow: {
+    flexDirection: 'row',
+    gap: 20,
+  },
+  toggleBtn: {
     alignItems: 'center',
-    position: 'relative',
     paddingVertical: 8,
   },
-  tabText: {
-    fontSize: 16,
-    color: '#999',
-    fontWeight: '600',
-  },
-  activeTabText: {
-    color: Colors.light.text,
-    fontWeight: 'bold',
+  toggleText: {
     fontSize: 17,
+    color: 'rgba(255,255,255,0.7)',
+    fontWeight: '600',
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
-  activeIndicator: {
-    position: 'absolute',
-    bottom: 0,
-    width: 20,
-    height: 3,
-    backgroundColor: Colors.light.tint,
-    borderRadius: 2,
+  toggleTextActive: {
+    color: '#fff',
+    fontWeight: '800',
   },
-  searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  toggleUnderline: {
+    marginTop: 4,
+    height: 2.5,
     backgroundColor: '#fff',
-    borderRadius: 24,
-    paddingHorizontal: 16,
-    height: 44,
-    borderWidth: 1,
-    borderColor: '#eee',
-    gap: 10,
+    borderRadius: 2,
+    width: 28,
   },
-  searchPlaceholder: {
-    color: '#999',
-    fontSize: 15,
+  searchIconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

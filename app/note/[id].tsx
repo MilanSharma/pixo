@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, Dimensions, TextInput, Platform, KeyboardAvoidingView, ActivityIndicator, Alert, Pressable } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Dimensions, TextInput, Platform, KeyboardAvoidingView, ActivityIndicator, Alert, Pressable, Image } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
-import { Image } from 'expo-image';
 import { Heart, MessageCircle, Star, Share2, ChevronLeft, Send } from 'lucide-react-native';
 import { Colors } from '@/constants/colors';
 import { MOCK_NOTES } from '@/mocks/data';
@@ -245,7 +244,7 @@ export default function NoteDetailScreen() {
     return (
       <View style={[styles.container, styles.loadingContainer]}>
         <View style={[styles.header, { paddingTop: insets.top }]}>
-          <Pressable onPress={() => router.back()}>
+          <Pressable onPress={() => router.canGoBack() ? router.back() : router.replace('/')}>
             <ChevronLeft size={28} color={Colors.light.text} />
           </Pressable>
         </View>
@@ -259,7 +258,7 @@ export default function NoteDetailScreen() {
       <Stack.Screen options={{ headerShown: false }} />
       
       <View style={[styles.header, { paddingTop: insets.top }]}>
-        <Pressable onPress={() => router.back()}>
+        <Pressable onPress={() => router.canGoBack() ? router.back() : router.replace('/')}>
           <ChevronLeft size={28} color={Colors.light.text} />
         </Pressable>
         
@@ -287,7 +286,7 @@ export default function NoteDetailScreen() {
                 key={index}
                 source={{ uri }}
                 style={styles.carouselImage}
-                contentFit="cover"
+                resizeMode="cover"
               />
             ))}
           </ScrollView>

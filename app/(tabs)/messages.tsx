@@ -1,100 +1,106 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable, FlatList, Alert } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, Pressable, FlatList, Alert, ActivityIndicator } from 'react-native';
 import { Image } from 'expo-image';
 import { Heart, UserPlus, MessageCircle } from 'lucide-react-native';
 import { Colors } from '@/constants/colors';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { MOCK_USERS } from '@/mocks/data';
 import { useRouter } from 'expo-router';
+import { useAuth } from '@/context/AuthContext';
+import { getUserConversations } from '@/lib/database';
+import { supabase } from '@/lib/supabase';
 
 const TABS = ['Notifications', 'Chats'];
 
+// Keep mock notifications for now as we don't have a notifications table yet
 const MOCK_NOTIFICATIONS = [
-  { id: '1', type: 'like', user: MOCK_USERS[1], text: 'liked your note.', time: '2m', noteId: 'n1' },
-  { id: '2', type: 'follow', user: MOCK_USERS[2], text: 'started following you.', time: '1h' },
-  { id: '3', type: 'comment', user: MOCK_USERS[3], text: 'commented: "Love this!"', time: '3h', noteId: 'n3' },
-  { id: '4', type: 'like', user: MOCK_USERS[1], text: 'liked your note.', time: '5h', noteId: 'n5' },
-];
-
-const MOCK_CHATS = [
-  { id: 'c1', user: MOCK_USERS[1], lastMessage: 'Hey, where did you get that?', time: '2m', unread: 2 },
-  { id: 'c2', user: MOCK_USERS[2], lastMessage: 'Thanks for sharing!', time: '1d', unread: 0 },
-  { id: 'c3', user: MOCK_USERS[3], lastMessage: 'See you there.', time: '3d', unread: 0 },
+  { id: '1', type: 'like', user: { username: 'fashion_daily', avatar: 'https://github.com/shadcn.png' }, text: 'liked your note.', time: '2m' },
+  { id: '2', type: 'follow', user: { username: 'cafe_hopper', avatar: 'https://github.com/shadcn.png' }, text: 'started following you.', time: '1h' },
 ];
 
 export default function MessagesScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState('Notifications');
+  const { user } = useAuth();
+  const [activeTab, setActiveTab] = useState('Chats'); // Default to Chats to see functionality
+  const [chats, setChats] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
 
-  const handleNotificationPress = (notification: any) => {
-    if (notification.type === 'like' || notification.type === 'comment') {
-      if (notification.noteId) {
-        router.push(`/note/${notification.noteId}`);
-      }
-    } else if (notification.type === 'follow') {
-      Alert.alert('User Profile', `${notification.user.username}\n\nFollowers: ${notification.user.followers}\nFollowing: ${notification.user.following}`);
+  useEffect(() => {
+    if (user && activeTab === 'Chats') {
+      loadChats();
+      
+      // Subscribe to new messages to update the list live
+      const channel = supabase.channel('inbox_updates')
+        .on(
+            'postgres_changes',
+            {
+                event: 'INSERT',
+                schema: 'public',
+                table: 'messages',
+                filter: `receiver_id=eq.${user.id}`, 
+            },
+            () => loadChats() // Reload list on new message
+        )
+        .subscribe();
+
+        return () => { supabase.removeChannel(channel); };
+    }
+  }, [user, activeTab]);
+
+  const loadChats = async () => {
+    if (!user) return;
+    setLoading(true);
+    try {
+      const data = await getUserConversations(user.id);
+      setChats(data);
+    } catch (error) {
+      console.error('Error loading chats:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleChatPress = (chat: any) => {
-    router.push(`/chat/${chat.user.id}`);
+  const handleChatPress = (userId: string) => {
+    router.push(`/chat/${userId}`);
   };
 
-  const renderNotification = ({ item }: any) => {
-    let Icon;
-    let iconColor;
-
-    switch (item.type) {
-      case 'like': Icon = Heart; iconColor = Colors.light.tint; break;
-      case 'follow': Icon = UserPlus; iconColor = Colors.light.blue; break;
-      case 'comment': Icon = MessageCircle; iconColor = Colors.light.secondary; break;
-      default: Icon = Heart; iconColor = Colors.light.tint;
-    }
-
-    return (
-      <Pressable style={styles.notificationItem} onPress={() => handleNotificationPress(item)}>
-        <View style={styles.avatarContainer}>
-          <Image source={{ uri: item.user.avatar }} style={styles.avatar} />
-          <View style={[styles.iconBadge, { backgroundColor: iconColor }]}>
-            <Icon size={10} color="#fff" fill={iconColor} />
-          </View>
-        </View>
+  const renderNotification = ({ item }: any) => (
+      <View style={styles.notificationItem}>
+        <Image source={{ uri: item.user.avatar }} style={styles.avatar} />
         <View style={styles.notificationContent}>
           <Text style={styles.notificationText}>
             <Text style={styles.username}>{item.user.username}</Text> {item.text}
           </Text>
           <Text style={styles.timeText}>{item.time}</Text>
         </View>
-        <Image
-          source={{ uri: 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?q=80&w=100&auto=format&fit=crop' }}
-          style={styles.notificationImage}
-        />
-      </Pressable>
-    );
-  };
+      </View>
+  );
 
-  const renderChat = ({ item }: any) => (
-    <Pressable style={styles.chatItem} onPress={() => handleChatPress(item)}>
+  const renderChat = ({ item }: any) => {
+    const time = new Date(item.time);
+    const timeString = time.toLocaleDateString() === new Date().toLocaleDateString()
+      ? time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      : time.toLocaleDateString();
+
+    return (
+    <Pressable style={styles.chatItem} onPress={() => handleChatPress(item.user.id)}>
       <Image source={{ uri: item.user.avatar }} style={styles.chatAvatar} />
       <View style={styles.chatContent}>
         <View style={styles.chatHeader}>
           <Text style={styles.chatUsername}>{item.user.username}</Text>
-          <Text style={styles.chatTime}>{item.time}</Text>
+          <Text style={styles.chatTime}>{timeString}</Text>
         </View>
         <View style={styles.chatFooter}>
-          <Text style={[styles.lastMessage, item.unread > 0 && styles.unreadMessage]} numberOfLines={1}>
-            {item.lastMessage}
+          <Text style={[
+            styles.lastMessage, 
+            item.unread > 0 && styles.unreadMessage
+          ]} numberOfLines={1}>
+            {item.sender_id === user?.id ? 'You: ' : ''}{item.lastMessage}
           </Text>
-          {item.unread > 0 && (
-            <View style={styles.unreadBadge}>
-              <Text style={styles.unreadText}>{item.unread}</Text>
-            </View>
-          )}
         </View>
       </View>
     </Pressable>
-  );
+  )};
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -128,12 +134,21 @@ export default function MessagesScreen() {
           contentContainerStyle={styles.listContent}
         />
       ) : (
-        <FlatList
-          data={MOCK_CHATS}
-          keyExtractor={(item) => item.id}
-          renderItem={renderChat}
-          contentContainerStyle={styles.listContent}
-        />
+        <View style={{ flex: 1 }}>
+            {loading && chats.length === 0 ? (
+                <ActivityIndicator style={{ marginTop: 20 }} color={Colors.light.tint} />
+            ) : (
+                <FlatList
+                data={chats}
+                keyExtractor={(item) => item.id}
+                renderItem={renderChat}
+                contentContainerStyle={styles.listContent}
+                ListEmptyComponent={
+                    <Text style={styles.emptyText}>No messages yet. Start a conversation from a profile!</Text>
+                }
+                />
+            )}
+        </View>
       )}
     </View>
   );
@@ -193,30 +208,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 20,
   },
-  avatarContainer: {
-    position: 'relative',
-    marginRight: 12,
-  },
   avatar: {
     width: 44,
     height: 44,
     borderRadius: 22,
   },
-  iconBadge: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    backgroundColor: Colors.light.tint,
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#fff',
-  },
   notificationContent: {
     flex: 1,
+    marginLeft: 12,
   },
   notificationText: {
     fontSize: 14,
@@ -230,12 +229,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#999',
     marginTop: 2,
-  },
-  notificationImage: {
-    width: 44,
-    height: 44,
-    borderRadius: 4,
-    marginLeft: 8,
   },
   chatItem: {
     flexDirection: 'row',
@@ -280,17 +273,9 @@ const styles = StyleSheet.create({
     color: Colors.light.text,
     fontWeight: '600',
   },
-  unreadBadge: {
-    backgroundColor: Colors.light.tint,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 10,
-    minWidth: 18,
-    alignItems: 'center',
-  },
-  unreadText: {
-    color: '#fff',
-    fontSize: 10,
-    fontWeight: 'bold',
-  },
+  emptyText: {
+    textAlign: 'center',
+    color: '#999',
+    marginTop: 40,
+  }
 });
