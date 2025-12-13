@@ -1,11 +1,12 @@
-import React, { useRef, useMemo, useEffect } from 'react';
+import React, { useRef, useMemo, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, Dimensions, Animated, Share } from 'react-native';
 import { Image } from 'expo-image';
 import { useVideoPlayer, VideoView } from 'expo-video';
-import { Heart, Bookmark, MessageCircle, Share2, MoreVertical } from 'lucide-react-native';
+import { Heart, Bookmark, MessageCircle, Share2, MoreVertical, Volume2, VolumeX, Play, Pause } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { Note } from '@/types';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Colors } from '@/constants/colors';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -30,9 +31,12 @@ export const ReelCard = ({
 }: ReelCardProps) => {
     const router = useRouter();
     
+    // UI States
+    const [isMuted, setIsMuted] = useState(false);
+    const [showControlIcon, setShowControlIcon] = useState<'play' | 'pause' | null>(null);
+    
     // Animation values
-    const scale = useRef(new Animated.Value(0)).current;
-    const opacity = useRef(new Animated.Value(0)).current;
+    const controlIconOpacity = useRef(new Animated.Value(0)).current;
     const likeButtonScale = useRef(new Animated.Value(1)).current;
 
     // 1. Detect if the media is a video
@@ -42,17 +46,15 @@ export const ReelCard = ({
         return lower.endsWith('.mp4') || lower.endsWith('.mov') || lower.endsWith('.webm');
     }, [note.media]);
 
-    // 2. Setup New Expo Video Player
+    // 2. Setup Video Player
     const player = useVideoPlayer(isVideo ? note.media[0] : null, player => {
         player.loop = true;
-        // Mute by default if you want, or unmute
-        player.muted = false; 
+        player.muted = isMuted;
     });
 
-    // 3. Control Playback based on active state
+    // 3. Handle Scroll Active State
     useEffect(() => {
         if (!isVideo) return;
-        
         if (isActive) {
             player.play();
         } else {
@@ -60,25 +62,34 @@ export const ReelCard = ({
         }
     }, [isActive, isVideo, player]);
 
-    const animateHeart = () => {
-        scale.setValue(0);
-        opacity.setValue(0);
-        Animated.sequence([
-            Animated.parallel([
-                Animated.spring(scale, { toValue: 1, useNativeDriver: true, friction: 6 }),
-                Animated.timing(opacity, { toValue: 1, duration: 100, useNativeDriver: true }),
-            ]),
-            Animated.delay(500),
-            Animated.parallel([
-                Animated.timing(scale, { toValue: 0, duration: 200, useNativeDriver: true }),
-                Animated.timing(opacity, { toValue: 0, duration: 200, useNativeDriver: true }),
-            ]),
-        ]).start();
+    // 4. Handle Mute Toggle
+    const toggleMute = () => {
+        const newMutedState = !isMuted;
+        setIsMuted(newMutedState);
+        player.muted = newMutedState;
     };
 
-    const handleDoubleTap = () => {
-        if (!isLiked) onLike?.();
-        animateHeart();
+    // 5. Handle Play/Pause Tap
+    const togglePlayback = () => {
+        if (!isVideo) return;
+
+        if (player.playing) {
+            player.pause();
+            showIconAnimation('pause');
+        } else {
+            player.play();
+            showIconAnimation('play');
+        }
+    };
+
+    const showIconAnimation = (type: 'play' | 'pause') => {
+        setShowControlIcon(type);
+        controlIconOpacity.setValue(1);
+        Animated.sequence([
+            Animated.timing(controlIconOpacity, { toValue: 1, duration: 200, useNativeDriver: true }),
+            Animated.delay(600),
+            Animated.timing(controlIconOpacity, { toValue: 0, duration: 300, useNativeDriver: true }),
+        ]).start(() => setShowControlIcon(null));
     };
 
     const handleLikePress = () => {
@@ -111,7 +122,7 @@ export const ReelCard = ({
 
     return (
         <View style={styles.container}>
-            <Pressable style={styles.imagePressable} onPress={handleDoubleTap}>
+            <Pressable style={styles.imagePressable} onPress={togglePlayback}>
                 {isVideo ? (
                     <VideoView
                         style={styles.image}
@@ -127,19 +138,47 @@ export const ReelCard = ({
                     />
                 )}
 
-                <View style={styles.centerHeartContainer} pointerEvents="none">
-                    <Animated.View style={{ transform: [{ scale }], opacity }}>
-                        <Heart size={100} color="#fff" fill="rgba(255, 255, 255, 0.9)" strokeWidth={0} />
-                    </Animated.View>
-                </View>
+                {/* Play/Pause Center Icon Animation */}
+                {showControlIcon && (
+                    <View style={styles.centerIconContainer} pointerEvents="none">
+                        <Animated.View style={{ opacity: controlIconOpacity, backgroundColor: 'rgba(0,0,0,0.5)', padding: 20, borderRadius: 50 }}>
+                            {showControlIcon === 'play' ? (
+                                <Play size={40} color="#fff" fill="#fff" />
+                            ) : (
+                                <Pause size={40} color="#fff" fill="#fff" />
+                            )}
+                        </Animated.View>
+                    </View>
+                )}
 
                 <LinearGradient
                     colors={['transparent', 'rgba(0,0,0,0.1)', 'rgba(0,0,0,0.8)']}
                     style={styles.bottomGradient}
                     pointerEvents="none"
                 />
+
+                {/* Mute Button (Bottom Right of Video Area) */}
+                {isVideo && (
+                    <Pressable 
+                        style={styles.muteButton} 
+                        onPress={(e) => {
+                            e.stopPropagation(); // Prevent triggering play/pause
+                            toggleMute();
+                        }}
+                        hitSlop={20}
+                    >
+                        <View style={styles.muteIconWrapper}>
+                            {isMuted ? (
+                                <VolumeX size={20} color="#fff" />
+                            ) : (
+                                <Volume2 size={20} color="#fff" />
+                            )}
+                        </View>
+                    </Pressable>
+                )}
             </Pressable>
 
+            {/* Right Side Actions */}
             <View style={styles.actionsContainer}>
                 <Pressable onPress={handleUserPress} style={styles.actionButton}>
                     <Image source={{ uri: note.user.avatar }} style={styles.userAvatar} />
@@ -172,6 +211,7 @@ export const ReelCard = ({
                 </Pressable>
             </View>
 
+            {/* Bottom Info */}
             <View style={styles.infoContainer}>
                 <Pressable onPress={handleUserPress} style={styles.userInfo}>
                     <Image source={{ uri: note.user.avatar }} style={styles.bottomAvatar} />
@@ -188,12 +228,27 @@ const styles = StyleSheet.create({
     container: { width: SCREEN_WIDTH, height: SCREEN_HEIGHT, backgroundColor: '#000' },
     imagePressable: { flex: 1, width: '100%', height: '100%' },
     image: { width: '100%', height: '100%', backgroundColor: '#1a1a1a' },
-    centerHeartContainer: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center', zIndex: 50 },
+    centerIconContainer: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center', zIndex: 50 },
     bottomGradient: { position: 'absolute', left: 0, right: 0, bottom: 0, height: '50%' },
+    
+    // Mute Button Styles
+    muteButton: {
+        position: 'absolute',
+        bottom: 140, // Above bottom gradient/info
+        right: 16, // Left of action buttons
+        zIndex: 60,
+    },
+    muteIconWrapper: {
+        backgroundColor: 'rgba(0,0,0,0.6)',
+        padding: 8,
+        borderRadius: 20,
+    },
+
     actionsContainer: { position: 'absolute', right: 12, bottom: 120, gap: 20, alignItems: 'center', zIndex: 50 },
     actionButton: { alignItems: 'center', gap: 4 },
     userAvatar: { width: 48, height: 48, borderRadius: 24, borderWidth: 2, borderColor: '#fff', marginBottom: 10 },
     actionText: { color: '#fff', fontSize: 12, fontWeight: '600', textShadowColor: 'rgba(0,0,0,0.75)', textShadowOffset: {width:0,height:1}, textShadowRadius:3 },
+    
     infoContainer: { position: 'absolute', left: 12, right: 80, bottom: 120, gap: 8, zIndex: 50 },
     userInfo: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
     bottomAvatar: { width: 32, height: 32, borderRadius: 16, borderWidth: 1.5, borderColor: '#fff' },

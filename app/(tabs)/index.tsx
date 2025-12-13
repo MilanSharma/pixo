@@ -7,6 +7,7 @@ import { getNotes, likeNote, collectNote } from '@/lib/database';
 import { MOCK_NOTES } from '@/mocks/data';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { useIsFocused } from '@react-navigation/native';
 import { Note } from '@/types';
 import { useAuth } from '@/context/AuthContext';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -65,6 +66,7 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user } = useAuth();
+  const isFocused = useIsFocused();
   const [feedTab, setFeedTab] = useState('For You');
   const [notes, setNotes] = useState<Note[]>([]);
   const [loading, setLoading] = useState(true);
@@ -177,7 +179,7 @@ export default function HomeScreen() {
   const renderItem = ({ item, index }: { item: Note; index: number }) => (
     <ReelCard
       note={item}
-      isActive={index === currentIndex}
+      isActive={index === currentIndex && isFocused}
       onLike={() => handleLike(item.id)}
       onCollect={() => handleCollect(item.id)}
       onComment={() => handleComment(item.id)}

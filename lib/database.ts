@@ -384,3 +384,18 @@ export async function deleteNote(noteId: string) {
   if (error) throw error;
   return true;
 }
+
+export async function getFollowStatus(followerId: string, followingId: string) {
+  const { data, error } = await supabase
+    .from('follows')
+    .select('*')
+    .eq('follower_id', followerId)
+    .eq('following_id', followingId)
+    .maybeSingle();
+  
+  if (error) {
+     console.error('Error checking follow status:', error);
+     return false;
+  }
+  return !!data;
+}

@@ -7,98 +7,266 @@ import { Colors } from '@/constants/colors';
 import { MasonryList } from '@/components/MasonryList';
 import { MOCK_USERS, MOCK_NOTES } from '@/mocks/data';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useAuth } from '@/context/AuthContext';
+import { followUser, getFollowStatus, getProfile, getUserNotes } from '@/lib/database';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { StatusBar } from 'expo-status-bar';
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export default function UserProfileScreen() {
   const { id } = useLocalSearchParams();
+  const userId = Array.isArray(id) ? id[0] : id;
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { user: currentUser } = useAuth();
   
-  const [user, setUser] = useState<any>(null);
+  const [userProfile, setUserProfile] = useState<any>(null);
   const [notes, setNotes] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState('Notes');
   const [isFollowing, setIsFollowing] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [followLoading, setFollowLoading] = useState(false);
 
   useEffect(() => {
-    // Simulate Fetch
-    const u = MOCK_USERS.find(u => u.id === id) || MOCK_USERS[0];
-    setUser(u);
-    // Filter notes
-    const userNotes = MOCK_NOTES.filter(n => n.userId === id);
-    setNotes(userNotes);
-  }, [id]);
+    loadData();
+  }, [userId]);
+
+  const loadData = async () => {
+    if (!userId) return;
+    setLoading(true);
+
+    try {
+      if (UUID_REGEX.test(userId)) {
+        // --- REAL USER ---
+        const profile = await getProfile(userId);
+        setUserProfile({
+           id: profile.id,
+           username: profile.username,
+           avatar: profile.avatar_url,
+           bio: profile.bio,
+           followers: profile.followers_count || 0,
+           following: profile.following_count || 0,
+        });
+
+        const userNotes = await getUserNotes(userId);
+        const mappedNotes = userNotes?.map((n: any) => ({
+            id: n.id,
+            userId: n.user_id,
+            user: { username: profile.username, avatar: profile.avatar_url },
+            title: n.title,
+            media: n.images || [],
+            likes: n.likes_count,
+            collects: n.collects_count,
+        })) || [];
+        setNotes(mappedNotes);
+
+        if (currentUser) {
+            const status = await getFollowStatus(currentUser.id, userId);
+            setIsFollowing(status);
+        }
+
+      } else {
+        // --- MOCK USER ---
+        const u = MOCK_USERS.find(u => u.id === userId) || MOCK_USERS[0];
+        setUserProfile(u);
+        const userNotes = MOCK_NOTES.filter(n => n.userId === userId);
+        setNotes(userNotes);
+        
+        if (currentUser) {
+            const stored = await AsyncStorage.getItem(`followed_mock_${userId}`);
+            setIsFollowing(stored === 'true');
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleFollow = async () => {
+    if (!currentUser) {
+      Alert.alert('Sign In', 'Please sign in to follow users.');
+      return;
+    }
+    
+    const newState = !isFollowing;
+    setIsFollowing(newState);
+    setFollowLoading(true);
+
+    try {
+        if (UUID_REGEX.test(userId)) {
+            await followUser(currentUser.id, userId);
+        } else {
+            await AsyncStorage.setItem(`followed_mock_${userId}`, newState ? 'true' : 'false');
+        }
+    } catch (error) {
+        setIsFollowing(!newState);
+        console.error(error);
+    } finally {
+        setFollowLoading(false);
+    }
+  };
+
+  const handleMessage = () => {
+    if (!currentUser) {
+        Alert.alert('Sign In', 'Please sign in to send messages.');
+        return;
+    }
+    router.push(`/chat/${userId}`);
+  };
 
   const handleShare = () => {
-    Share.share({ message: `Check out ${user?.username}'s profile on Pixo!` });
+    Share.share({ message: `Check out ${userProfile?.username}'s profile on Pixo!` });
   };
 
-  const handleMore = () => {
-    Alert.alert('Options', 'Select an action', [
-        { text: 'Report User', style: 'destructive' },
-        { text: 'Block', style: 'cancel' },
-        { text: 'Cancel', style: 'cancel' }
-    ]);
-  };
-
-  if (!user) return <ActivityIndicator />;
-
-  const displayNotes = activeTab === 'Notes' ? notes : []; // Empty for collects in mock
+  const displayNotes = activeTab === 'Notes' ? notes : []; 
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={styles.container}>
+      {/* 
+        CRITICAL FIX: 
+        Render Stack.Screen immediately so the header is hidden 
+        BEFORE waiting for data to load. This prevents the black bar.
+      */}
       <Stack.Screen options={{ headerShown: false }} />
-      <View style={styles.navBar}>
-        <Pressable onPress={() => router.canGoBack() ? router.back() : router.replace('/')}><ArrowLeft size={24} color="#333" /></Pressable>
-        <Pressable onPress={handleMore}><MoreHorizontal size={24} color="#333" /></Pressable>
-      </View>
+      <StatusBar style="dark" />
+      
+      {/* Top Spacer for Status Bar */}
+      <View style={{ height: insets.top, backgroundColor: '#fff' }} />
 
-      <View style={styles.profileHeader}>
-         <Image source={{ uri: user.avatar }} style={styles.avatar} />
-         <View style={styles.stats}>
-             <Text style={styles.statNum}>{user.followers}</Text><Text>Followers</Text>
-         </View>
-         <View style={styles.stats}>
-             <Text style={styles.statNum}>{user.following}</Text><Text>Following</Text>
-         </View>
-      </View>
-      <Text style={styles.username}>{user.username}</Text>
-      <Text style={styles.bio}>{user.bio}</Text>
-
-      <View style={styles.actions}>
-        <Pressable style={[styles.btn, styles.followBtn]} onPress={() => setIsFollowing(!isFollowing)}>
-            <Text style={{color:'#fff'}}>{isFollowing ? 'Following' : 'Follow'}</Text>
-        </Pressable>
-        <Pressable style={[styles.btn, styles.shareBtn]} onPress={handleShare}>
-            <Share2 size={20} color="#333" />
-        </Pressable>
-      </View>
-
-      <View style={styles.tabs}>
-        {['Notes', 'Collects'].map(t => (
-            <Pressable key={t} onPress={() => setActiveTab(t)} style={[styles.tab, activeTab === t && styles.activeTab]}>
-                <Text style={{color: activeTab === t ? '#333' : '#999', fontWeight:'bold'}}>{t}</Text>
+      {loading || !userProfile ? (
+        <View style={[styles.contentContainer, styles.center]}>
+            <ActivityIndicator size="large" color={Colors.light.tint} />
+        </View>
+      ) : (
+        <>
+          {/* Navbar */}
+          <View style={styles.navBar}>
+            <Pressable onPress={() => router.canGoBack() ? router.back() : router.replace('/')} hitSlop={10} style={styles.backBtn}>
+                <ArrowLeft size={24} color="#333" />
             </Pressable>
-        ))}
-      </View>
+            <Text style={styles.navUsername}>{userProfile.username}</Text>
+            <Pressable onPress={() => Alert.alert('Options', 'Report or Block user')}>
+                <MoreHorizontal size={24} color="#333" />
+            </Pressable>
+          </View>
 
-      <MasonryList data={displayNotes} />
+          <MasonryList
+            data={displayNotes}
+            ListHeaderComponent={
+              <>
+                <View style={styles.profileHeader}>
+                    <Image 
+                        source={{ uri: userProfile.avatar || 'https://ui-avatars.com/api/?name=User' }} 
+                        style={styles.avatar} 
+                    />
+                    <View style={styles.statsContainer}>
+                        <View style={styles.statItem}>
+                            <Text style={styles.statNum}>{userProfile.followers}</Text>
+                            <Text style={styles.statLabel}>Followers</Text>
+                        </View>
+                        <View style={styles.statItem}>
+                            <Text style={styles.statNum}>{userProfile.following}</Text>
+                            <Text style={styles.statLabel}>Following</Text>
+                        </View>
+                    </View>
+                </View>
+
+                <View style={styles.bioSection}>
+                    <Text style={styles.username}>{userProfile.username}</Text>
+                    {userProfile.bio && <Text style={styles.bio}>{userProfile.bio}</Text>}
+                </View>
+
+                <View style={styles.actions}>
+                    <Pressable 
+                        style={[
+                            styles.btn, 
+                            isFollowing ? styles.followingBtn : styles.followBtn,
+                            { flex: 1 }
+                        ]} 
+                        onPress={handleFollow}
+                        disabled={followLoading}
+                    >
+                        <Text style={[
+                            styles.btnText, 
+                            isFollowing ? styles.followingText : styles.followText
+                        ]}>
+                            {isFollowing ? 'Following' : 'Follow'}
+                        </Text>
+                    </Pressable>
+                    
+                    <Pressable 
+                        style={[styles.btn, styles.messageBtn, { flex: 1 }]} 
+                        onPress={handleMessage}
+                    >
+                        <Text style={styles.messageText}>Message</Text>
+                    </Pressable>
+
+                    <Pressable style={[styles.btn, styles.iconBtn]} onPress={handleShare}>
+                        <Share2 size={20} color="#333" />
+                    </Pressable>
+                </View>
+
+                <View style={styles.tabs}>
+                    {['Notes', 'Collects'].map(t => (
+                        <Pressable key={t} onPress={() => setActiveTab(t)} style={[styles.tab, activeTab === t && styles.activeTab]}>
+                            <Text style={{color: activeTab === t ? '#333' : '#999', fontWeight:'bold'}}>{t}</Text>
+                        </Pressable>
+                    ))}
+                </View>
+              </>
+            }
+          />
+        </>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
-  navBar: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 16, height: 44, alignItems: 'center' },
+  container: { 
+    flex: 1, 
+    backgroundColor: '#fff', 
+  },
+  contentContainer: {
+    flex: 1,
+    backgroundColor: '#fff', 
+  },
+  center: { justifyContent: 'center', alignItems: 'center' },
+  navBar: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    paddingHorizontal: 16, 
+    height: 48, 
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+    backgroundColor: '#fff',
+  },
+  backBtn: { padding: 4 },
+  navUsername: { fontWeight: 'bold', fontSize: 16 },
   profileHeader: { flexDirection: 'row', padding: 20, alignItems: 'center' },
-  avatar: { width: 80, height: 80, borderRadius: 40, marginRight: 20 },
-  stats: { alignItems: 'center', marginRight: 20 },
-  statNum: { fontWeight: 'bold', fontSize: 18 },
-  username: { fontSize: 20, fontWeight: 'bold', paddingHorizontal: 20 },
-  bio: { paddingHorizontal: 20, color: '#666', marginVertical: 10 },
-  actions: { flexDirection: 'row', paddingHorizontal: 20, gap: 10 },
-  btn: { borderRadius: 20, alignItems: 'center', justifyContent: 'center', height: 40 },
-  followBtn: { flex: 1, backgroundColor: Colors.light.tint },
-  shareBtn: { width: 40, borderWidth: 1, borderColor: '#ddd' },
-  tabs: { flexDirection: 'row', marginTop: 20, borderBottomWidth: 1, borderColor: '#eee' },
-  tab: { flex: 1, alignItems: 'center', padding: 10 },
-  activeTab: { borderBottomWidth: 2, borderColor: Colors.light.tint },
+  avatar: { width: 86, height: 86, borderRadius: 43, marginRight: 24, borderWidth: 1, borderColor: '#eee' },
+  statsContainer: { flex: 1, flexDirection: 'row', justifyContent: 'space-around' },
+  statItem: { alignItems: 'center' },
+  statNum: { fontWeight: 'bold', fontSize: 18, color: '#000' },
+  statLabel: { color: '#666', fontSize: 13 },
+  bioSection: { paddingHorizontal: 20, marginBottom: 16 },
+  username: { fontSize: 18, fontWeight: 'bold', marginBottom: 4 },
+  bio: { color: '#444', lineHeight: 20 },
+  actions: { flexDirection: 'row', paddingHorizontal: 20, gap: 8, marginBottom: 10 },
+  btn: { borderRadius: 8, alignItems: 'center', justifyContent: 'center', height: 36 },
+  btnText: { fontWeight: '600', fontSize: 14 },
+  followBtn: { backgroundColor: Colors.light.tint },
+  followText: { color: '#fff' },
+  followingBtn: { backgroundColor: '#eee', borderWidth: 1, borderColor: '#ddd' },
+  followingText: { color: '#333' },
+  messageBtn: { backgroundColor: '#eee', borderWidth: 1, borderColor: '#ddd' },
+  messageText: { color: '#333', fontWeight: '600' },
+  iconBtn: { width: 36, backgroundColor: '#eee', borderWidth: 1, borderColor: '#ddd' },
+  tabs: { flexDirection: 'row', marginTop: 10, borderBottomWidth: 1, borderColor: '#eee' },
+  tab: { flex: 1, alignItems: 'center', padding: 12 },
+  activeTab: { borderBottomWidth: 2, borderColor: '#333' },
 });
