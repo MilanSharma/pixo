@@ -5,17 +5,13 @@ import { Heart, MessageCircle, Star, Share2, ChevronLeft, Send, Trash2 } from 'l
 import { Colors } from '@/constants/colors';
 import { MOCK_NOTES } from '@/mocks/data';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Comment, Note, User } from '@/types';
+import { Comment, Note } from '@/types';
 import { useAuth } from '@/context/AuthContext';
-import { getNoteById, getComments, addComment, likeNote, collectNote, checkUserInteractions, followUser, deleteNote } from '@/lib/database';
+import { getNoteById, getComments, addComment, likeNote, collectNote, checkUserInteractions, followUser, deleteNote, getFollowStatus } from '@/lib/database';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-function isValidUUID(str: string): boolean {
-  return UUID_REGEX.test(str);
-}
 
 interface DBComment {
   id: string;
@@ -30,6 +26,7 @@ interface DBComment {
 
 export default function NoteDetailScreen() {
   const { id } = useLocalSearchParams();
+  const noteId = Array.isArray(id) ? id[0] : id;
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
@@ -39,6 +36,8 @@ export default function NoteDetailScreen() {
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [commentText, setCommentText] = useState('');
   const [comments, setComments] = useState<Comment[]>([]);
+  
+  // Interaction States
   const [isLiked, setIsLiked] = useState(false);
   const [isCollected, setIsCollected] = useState(false);
   const [isFollowing, setIsFollowing] = useState(false);
@@ -47,92 +46,105 @@ export default function NoteDetailScreen() {
 
   useEffect(() => {
     loadNote();
-  }, [id]);
+  }, [noteId]);
 
   const loadNote = async () => {
     try {
       setLoading(true);
-      const noteId = id as string;
+      if (!noteId) return;
       
-      if (!isValidUUID(noteId)) {
-        const mockNote = MOCK_NOTES.find(n => n.id === noteId);
-        setNote(mockNote || null);
-        if (mockNote) {
-          setLikesCount(mockNote.likes);
-          setCollectsCount(mockNote.collects);
-        }
-        setLoading(false);
-        return;
-      }
-      
-      const data = await getNoteById(noteId);
-      if (data) {
-        const transformedNote: Note = {
-          id: data.id,
-          userId: data.user_id,
-          user: {
-            id: data.profiles.id,
-            username: data.profiles.username,
-            avatar: data.profiles.avatar_url || 'https://ui-avatars.com/api/?name=User',
-            followers: data.profiles.followers_count || 0,
-            following: 0,
-            likes: 0,
-            collects: 0,
-          },
-          title: data.title,
-          description: data.content || '',
-          media: data.images || [],
-          tags: [],
-          likes: data.likes_count,
-          collects: data.collects_count,
-          commentsCount: data.comments_count,
-          createdAt: data.created_at,
-          location: data.location,
-        };
-        setNote(transformedNote);
-        setLikesCount(data.likes_count);
-        setCollectsCount(data.collects_count);
-        
-        const dbComments = await getComments(data.id);
-        if (dbComments) {
-          setComments(dbComments.map((c: DBComment) => ({
-            id: c.id,
-            noteId: data.id,
+      const isRealId = UUID_REGEX.test(noteId);
+
+      if (isRealId) {
+        // --- REAL DB NOTE ---
+        const data = await getNoteById(noteId);
+        if (data) {
+          const transformedNote: Note = {
+            id: data.id,
+            userId: data.user_id,
             user: {
-              id: c.profiles.id,
-              username: c.profiles.username,
-              avatar: c.profiles.avatar_url || 'https://ui-avatars.com/api/?name=User',
-              followers: 0,
+              id: data.profiles.id,
+              username: data.profiles.username,
+              avatar: data.profiles.avatar_url || 'https://ui-avatars.com/api/?name=User',
+              followers: data.profiles.followers_count || 0,
               following: 0,
               likes: 0,
               collects: 0,
             },
-            text: c.content,
-            createdAt: c.created_at,
-          })));
-        }
-        
-        if (user) {
-          const interactions = await checkUserInteractions(user.id, data.id);
-          setIsLiked(interactions.isLiked);
-          setIsCollected(interactions.isCollected);
+            title: data.title,
+            description: data.content || '',
+            media: data.images || [],
+            tags: [],
+            likes: data.likes_count,
+            collects: data.collects_count,
+            commentsCount: data.comments_count,
+            createdAt: data.created_at,
+            location: data.location,
+          };
+          setNote(transformedNote);
+          setLikesCount(data.likes_count);
+          setCollectsCount(data.collects_count);
+          
+          // Comments
+          const dbComments = await getComments(data.id);
+          if (dbComments) {
+            setComments(dbComments.map((c: DBComment) => ({
+              id: c.id,
+              noteId: data.id,
+              user: {
+                id: c.profiles.id,
+                username: c.profiles.username,
+                avatar: c.profiles.avatar_url || 'https://ui-avatars.com/api/?name=User',
+                followers: 0, following: 0, likes: 0, collects: 0,
+              },
+              text: c.content,
+              createdAt: c.created_at,
+            })));
+          }
+          
+          if (user) {
+            const interactions = await checkUserInteractions(user.id, data.id);
+            setIsLiked(interactions.isLiked);
+            setIsCollected(interactions.isCollected);
+            
+            const followStatus = await getFollowStatus(user.id, data.user_id);
+            setIsFollowing(followStatus);
+          }
         }
       } else {
-        const mockNote = MOCK_NOTES.find(n => n.id === id);
-        setNote(mockNote || null);
+        // --- MOCK NOTE ---
+        const mockNote = MOCK_NOTES.find(n => n.id === noteId);
         if (mockNote) {
-          setLikesCount(mockNote.likes);
-          setCollectsCount(mockNote.collects);
+            setNote(mockNote);
+            setLikesCount(mockNote.likes);
+            setCollectsCount(mockNote.collects);
+            
+            // Load Local Interactions
+            if (user) {
+                // Likes
+                const likedStr = await AsyncStorage.getItem(`liked_mock_notes_${user.id}`);
+                const likedArr = likedStr ? JSON.parse(likedStr) : [];
+                setIsLiked(likedArr.includes(noteId));
+
+                // Collects
+                const collectedStr = await AsyncStorage.getItem(`collected_mock_notes_${user.id}`);
+                const collectedArr = collectedStr ? JSON.parse(collectedStr) : [];
+                setIsCollected(collectedArr.includes(noteId));
+
+                // Follows
+                const followedStr = await AsyncStorage.getItem(`followed_mock_${mockNote.userId}`);
+                setIsFollowing(followedStr === 'true');
+
+                // Comments
+                const commentsStr = await AsyncStorage.getItem(`mock_comments_${noteId}`);
+                if (commentsStr) {
+                    setComments(JSON.parse(commentsStr));
+                }
+            }
         }
       }
     } catch (error) {
       console.error('Error loading note:', error);
-      const mockNote = MOCK_NOTES.find(n => n.id === id);
-      setNote(mockNote || null);
-      if (mockNote) {
-        setLikesCount(mockNote.likes);
-        setCollectsCount(mockNote.collects);
-      }
     } finally {
       setLoading(false);
     }
@@ -143,16 +155,23 @@ export default function NoteDetailScreen() {
       Alert.alert('Sign In Required', 'Please sign in to follow');
       return;
     }
-    if (!note || !isValidUUID(note.user.id)) {
-      Alert.alert('Info', 'Follow feature not available for demo content');
-      return;
-    }
+    if (!note) return;
+
+    const newState = !isFollowing;
+    setIsFollowing(newState); // Optimistic
+
+    const isRealId = UUID_REGEX.test(note.userId);
     
     try {
-      const following = await followUser(user.id, note.user.id);
-      setIsFollowing(following);
+      if (isRealId) {
+          await followUser(user.id, note.userId);
+      } else {
+          // Local Persistence
+          await AsyncStorage.setItem(`followed_mock_${note.userId}`, newState ? 'true' : 'false');
+      }
     } catch (error) {
       console.error('Error following user:', error);
+      setIsFollowing(!newState); // Revert
     }
   };
 
@@ -175,28 +194,50 @@ export default function NoteDetailScreen() {
     }
     if (!note) return;
     
+    const text = commentText.trim();
+    setCommentText(''); // Clear input
+
+    const isRealId = UUID_REGEX.test(note.id);
+
     try {
-      const newComment = await addComment(user.id, note.id, commentText.trim());
-      if (newComment) {
-        setComments([{
-          id: newComment.id,
-          noteId: note.id,
-          user: {
-            id: newComment.profiles.id,
-            username: newComment.profiles.username,
-            avatar: newComment.profiles.avatar_url || 'https://ui-avatars.com/api/?name=User',
-            followers: 0,
-            following: 0,
-            likes: 0,
-            collects: 0,
-          },
-          text: newComment.content,
-          createdAt: newComment.created_at,
-        }, ...comments]);
-      }
-      setCommentText('');
+        if (isRealId) {
+            // Real DB
+            const newComment = await addComment(user.id, note.id, text);
+            if (newComment) {
+                setComments(prev => [{
+                    id: newComment.id,
+                    noteId: note.id,
+                    user: {
+                        id: newComment.profiles.id,
+                        username: newComment.profiles.username,
+                        avatar: newComment.profiles.avatar_url,
+                        followers: 0, following: 0, likes: 0, collects: 0
+                    },
+                    text: newComment.content,
+                    createdAt: newComment.created_at,
+                }, ...prev]);
+            }
+        } else {
+            // Mock Comment
+            const newMockComment: Comment = {
+                id: Date.now().toString(),
+                noteId: note.id,
+                user: {
+                    id: user.id,
+                    username: 'you', // Or fetch from profile context if available
+                    avatar: 'https://ui-avatars.com/api/?name=You',
+                    followers: 0, following: 0, likes: 0, collects: 0
+                },
+                text: text,
+                createdAt: new Date().toISOString()
+            };
+            const updatedComments = [newMockComment, ...comments];
+            setComments(updatedComments);
+            await AsyncStorage.setItem(`mock_comments_${note.id}`, JSON.stringify(updatedComments));
+        }
     } catch (error) {
       console.error('Error adding comment:', error);
+      Alert.alert('Error', 'Failed to post comment');
     }
   };
 
@@ -207,10 +248,26 @@ export default function NoteDetailScreen() {
     }
     if (!note) return;
     
+    const newState = !isLiked;
+    setIsLiked(newState);
+    setLikesCount(prev => newState ? prev + 1 : prev - 1);
+
+    const isRealId = UUID_REGEX.test(note.id);
+
     try {
-      const liked = await likeNote(user.id, note.id);
-      setIsLiked(liked);
-      setLikesCount(prev => liked ? prev + 1 : prev - 1);
+        if (isRealId) {
+            await likeNote(user.id, note.id);
+        } else {
+            // Local Mock Like
+            const likedStr = await AsyncStorage.getItem(`liked_mock_notes_${user.id}`);
+            let likedArr = likedStr ? JSON.parse(likedStr) : [];
+            if (newState) {
+                if (!likedArr.includes(note.id)) likedArr.push(note.id);
+            } else {
+                likedArr = likedArr.filter((id: string) => id !== note.id);
+            }
+            await AsyncStorage.setItem(`liked_mock_notes_${user.id}`, JSON.stringify(likedArr));
+        }
     } catch (error) {
       console.error('Error liking note:', error);
     }
@@ -223,20 +280,35 @@ export default function NoteDetailScreen() {
     }
     if (!note) return;
     
+    const newState = !isCollected;
+    setIsCollected(newState);
+    setCollectsCount(prev => newState ? prev + 1 : prev - 1);
+
+    const isRealId = UUID_REGEX.test(note.id);
+
     try {
-      const collected = await collectNote(user.id, note.id);
-      setIsCollected(collected);
-      setCollectsCount(prev => collected ? prev + 1 : prev - 1);
+        if (isRealId) {
+            await collectNote(user.id, note.id);
+        } else {
+            // Local Mock Collect
+            const colStr = await AsyncStorage.getItem(`collected_mock_notes_${user.id}`);
+            let colArr = colStr ? JSON.parse(colStr) : [];
+            if (newState) {
+                if (!colArr.includes(note.id)) colArr.push(note.id);
+            } else {
+                colArr = colArr.filter((id: string) => id !== note.id);
+            }
+            await AsyncStorage.setItem(`collected_mock_notes_${user.id}`, JSON.stringify(colArr));
+        }
     } catch (error) {
       console.error('Error collecting note:', error);
     }
   };
 
-  
   const handleDelete = () => {
     Alert.alert(
       "Delete Note",
-      "Are you sure you want to delete this note?",
+      "Are you sure you want to delete this note? This cannot be undone.",
       [
         { text: "Cancel", style: "cancel" },
         { 
@@ -246,7 +318,10 @@ export default function NoteDetailScreen() {
             if (!note) return;
             try {
               setLoading(true);
-              await deleteNote(note.id);
+              if (UUID_REGEX.test(note.id)) {
+                  await deleteNote(note.id);
+              }
+              // For mock notes, we just navigate back since we can't delete them from the mock file dynamically
               router.replace('/(tabs)/me');
             } catch (error: any) {
               Alert.alert("Error", "Failed to delete note");
@@ -289,6 +364,11 @@ export default function NoteDetailScreen() {
         </Pressable>
         
         <View style={styles.headerRight}>
+          {user && note && user.id === note.userId && (
+            <Pressable onPress={handleDelete} style={{ marginRight: 16 }}>
+              <Trash2 size={24} color={Colors.light.tint} />
+            </Pressable>
+          )}
           <Pressable>
             <Share2 size={24} color={Colors.light.text} />
           </Pressable>
@@ -312,7 +392,7 @@ export default function NoteDetailScreen() {
                 key={index}
                 source={{ uri }}
                 style={styles.carouselImage}
-                resizeMode="cover"
+                contentFit="cover"
               />
             ))}
           </ScrollView>

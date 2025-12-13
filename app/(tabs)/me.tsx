@@ -9,6 +9,7 @@ import { useAuth } from '@/context/AuthContext';
 import { getUserNotes, getUserCollections, getUserLikes, deleteNote } from '@/lib/database';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Note } from '@/types';
+import { MOCK_NOTES } from '@/mocks/data'; // Import Mock Data
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const TABS = ['Notes', 'Collects', 'Likes'];
@@ -47,7 +48,7 @@ export default function MeScreen() {
   useFocusEffect(
     React.useCallback(() => {
       if (user) {
-        loadUserData(false); // False = Silent update
+        loadUserData(false);
         countMockFollows();
       }
     }, [user])
@@ -70,14 +71,32 @@ export default function MeScreen() {
     if (showSpinner) setIsRefreshing(true);
     
     try {
+      // 1. Load Real Data
       const [userNotes, userCollections, userLikes] = await Promise.all([
         getUserNotes(user.id),
         getUserCollections(user.id),
         getUserLikes(user.id),
       ]);
-      setNotes(userNotes?.map(transformDBNote) || []);
-      setCollectedNotes(userCollections?.map(transformDBNote) || []);
-      setLikedNotes(userLikes?.map(transformDBNote) || []);
+      
+      const realNotes = userNotes?.map(transformDBNote) || [];
+      const realCollections = userCollections?.map(transformDBNote) || [];
+      const realLikes = userLikes?.map(transformDBNote) || [];
+
+      // 2. Load Mock Data from Storage
+      const likedMockIdsStr = await AsyncStorage.getItem(`liked_mock_notes_${user.id}`);
+      const collectedMockIdsStr = await AsyncStorage.getItem(`collected_mock_notes_${user.id}`);
+      
+      const likedMockIds = likedMockIdsStr ? JSON.parse(likedMockIdsStr) : [];
+      const collectedMockIds = collectedMockIdsStr ? JSON.parse(collectedMockIdsStr) : [];
+
+      const mockLikedNotes = MOCK_NOTES.filter(n => likedMockIds.includes(n.id));
+      const mockCollectedNotes = MOCK_NOTES.filter(n => collectedMockIds.includes(n.id));
+
+      // 3. Merge & Set
+      setNotes(realNotes);
+      setCollectedNotes([...realCollections, ...mockCollectedNotes]);
+      setLikedNotes([...realLikes, ...mockLikedNotes]);
+
     } catch (error) {
       console.error(error);
     } finally {

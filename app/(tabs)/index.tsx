@@ -7,10 +7,11 @@ import { getNotes, likeNote, collectNote } from '@/lib/database';
 import { MOCK_NOTES } from '@/mocks/data';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { useIsFocused } from '@react-navigation/native';
 import { Note } from '@/types';
 import { useAuth } from '@/context/AuthContext';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useIsFocused } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const FEED_TABS = ['Following', 'For You'];
@@ -77,7 +78,21 @@ export default function HomeScreen() {
 
   useEffect(() => {
     loadNotes();
+    loadLocalInteractions();
   }, [feedTab]);
+
+  const loadLocalInteractions = async () => {
+      if (!user) return;
+      try {
+          const liked = await AsyncStorage.getItem(`liked_mock_notes_${user.id}`);
+          if (liked) setLikedNotes(new Set(JSON.parse(liked)));
+          
+          const collected = await AsyncStorage.getItem(`collected_mock_notes_${user.id}`);
+          if (collected) setCollectedNotes(new Set(JSON.parse(collected)));
+      } catch (e) {
+          console.error("Failed to load local interactions", e);
+      }
+  };
 
   const loadNotes = async () => {
     try {
@@ -101,14 +116,16 @@ export default function HomeScreen() {
   };
 
   const handleLike = async (noteId: string) => {
-    // UI Update immediately
+    if (!user) {
+        Alert.alert('Login Required', 'Please login to like posts');
+        return;
+    }
+
     const isLiked = likedNotes.has(noteId);
     const newLikedNotes = new Set(likedNotes);
-    if (isLiked) {
-      newLikedNotes.delete(noteId);
-    } else {
-      newLikedNotes.add(noteId);
-    }
+    if (isLiked) newLikedNotes.delete(noteId);
+    else newLikedNotes.add(noteId);
+    
     setLikedNotes(newLikedNotes);
 
     setNotes(prevNotes =>
@@ -119,24 +136,29 @@ export default function HomeScreen() {
       )
     );
 
-    // Only call DB if it's a real UUID (not a mock ID like 'n1')
-    if (user && UUID_REGEX.test(noteId)) {
+    // PERSISTENCE LOGIC
+    if (UUID_REGEX.test(noteId)) {
+      // Real DB Update
+      try { await likeNote(user.id, noteId); } catch (e) { console.error(e); }
+    } else {
+      // Mock Local Update
       try {
-        await likeNote(user.id, noteId);
-      } catch (error) {
-        console.error('Error liking note:', error);
-      }
+          await AsyncStorage.setItem(`liked_mock_notes_${user.id}`, JSON.stringify(Array.from(newLikedNotes)));
+      } catch (e) { console.error(e); }
     }
   };
 
   const handleCollect = async (noteId: string) => {
+    if (!user) {
+        Alert.alert('Login Required', 'Please login to save posts');
+        return;
+    }
+
     const isCollected = collectedNotes.has(noteId);
     const newCollectedNotes = new Set(collectedNotes);
-    if (isCollected) {
-      newCollectedNotes.delete(noteId);
-    } else {
-      newCollectedNotes.add(noteId);
-    }
+    if (isCollected) newCollectedNotes.delete(noteId);
+    else newCollectedNotes.add(noteId);
+
     setCollectedNotes(newCollectedNotes);
 
     setNotes(prevNotes =>
@@ -147,12 +169,13 @@ export default function HomeScreen() {
       )
     );
 
-    if (user && UUID_REGEX.test(noteId)) {
+    // PERSISTENCE LOGIC
+    if (UUID_REGEX.test(noteId)) {
+      try { await collectNote(user.id, noteId); } catch (e) { console.error(e); }
+    } else {
       try {
-        await collectNote(user.id, noteId);
-      } catch (error) {
-        console.error('Error collecting note:', error);
-      }
+          await AsyncStorage.setItem(`collected_mock_notes_${user.id}`, JSON.stringify(Array.from(newCollectedNotes)));
+      } catch (e) { console.error(e); }
     }
   };
 
@@ -249,63 +272,15 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#000',
-  },
-  loadingContainer: {
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerContainer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 10,
-  },
-  headerGradient: {
-    paddingHorizontal: 16,
-    paddingBottom: 20,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  toggleRow: {
-    flexDirection: 'row',
-    gap: 20,
-  },
-  toggleBtn: {
-    alignItems: 'center',
-    paddingVertical: 8,
-  },
-  toggleText: {
-    fontSize: 17,
-    color: 'rgba(255,255,255,0.7)',
-    fontWeight: '600',
-    textShadowColor: 'rgba(0, 0, 0, 0.3)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
-  },
-  toggleTextActive: {
-    color: '#fff',
-    fontWeight: '800',
-  },
-  toggleUnderline: {
-    marginTop: 4,
-    height: 2.5,
-    backgroundColor: '#fff',
-    borderRadius: 2,
-    width: 28,
-  },
-  searchIconBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  container: { flex: 1, backgroundColor: '#000' },
+  loadingContainer: { justifyContent: 'center', alignItems: 'center' },
+  headerContainer: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10 },
+  headerGradient: { paddingHorizontal: 16, paddingBottom: 20 },
+  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  toggleRow: { flexDirection: 'row', gap: 20 },
+  toggleBtn: { alignItems: 'center', paddingVertical: 8 },
+  toggleText: { fontSize: 17, color: 'rgba(255,255,255,0.7)', fontWeight: '600', textShadowColor: 'rgba(0, 0, 0, 0.3)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2 },
+  toggleTextActive: { color: '#fff', fontWeight: '800' },
+  toggleUnderline: { marginTop: 4, height: 2.5, backgroundColor: '#fff', borderRadius: 2, width: 28 },
+  searchIconBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' },
 });
