@@ -9,9 +9,18 @@ interface MasonryListProps {
   onRefresh?: () => void;
   refreshing?: boolean;
   ListHeaderComponent?: React.ReactNode;
+  onLongPressItem?: (note: Note) => void;
+  onDeleteItem?: (note: Note) => void;
 }
 
-export const MasonryList = ({ data, onRefresh, refreshing, ListHeaderComponent }: MasonryListProps) => {
+export const MasonryList = ({ 
+  data, 
+  onRefresh, 
+  refreshing, 
+  ListHeaderComponent, 
+  onLongPressItem,
+  onDeleteItem 
+}: MasonryListProps) => {
   const insets = useSafeAreaInsets();
   
   const [column1, column2] = useMemo(() => {
@@ -34,7 +43,7 @@ export const MasonryList = ({ data, onRefresh, refreshing, ListHeaderComponent }
       contentContainerStyle={{ 
         paddingHorizontal: 10, 
         paddingTop: 10,
-        paddingBottom: insets.bottom + 60 // Add bottom padding for tab bar
+        paddingBottom: insets.bottom + 60 
       }}
       refreshControl={
         onRefresh ? (
@@ -47,12 +56,22 @@ export const MasonryList = ({ data, onRefresh, refreshing, ListHeaderComponent }
       <View style={styles.container}>
         <View style={styles.column}>
           {column1.map((item) => (
-            <NoteCard key={item.id} note={item} />
+            <NoteCard 
+              key={item.id} 
+              note={item} 
+              onLongPress={onLongPressItem} 
+              onDelete={onDeleteItem}
+            />
           ))}
         </View>
         <View style={styles.column}>
           {column2.map((item) => (
-            <NoteCard key={item.id} note={item} />
+            <NoteCard 
+              key={item.id} 
+              note={item} 
+              onLongPress={onLongPressItem} 
+              onDelete={onDeleteItem}
+            />
           ))}
         </View>
       </View>
@@ -66,6 +85,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   column: {
-    width: '48.5%', // Slightly less than 50% to account for gap
+    width: '48.5%', 
   },
 });

@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, Dimensions, TextInput, Platform, KeyboardAvoidingView, ActivityIndicator, Alert, Pressable, Image } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
-import { Heart, MessageCircle, Star, Share2, ChevronLeft, Send } from 'lucide-react-native';
+import { Heart, MessageCircle, Star, Share2, ChevronLeft, Send, Trash2 } from 'lucide-react-native';
 import { Colors } from '@/constants/colors';
 import { MOCK_NOTES } from '@/mocks/data';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Comment, Note, User } from '@/types';
 import { useAuth } from '@/context/AuthContext';
-import { getNoteById, getComments, addComment, likeNote, collectNote, checkUserInteractions, followUser } from '@/lib/database';
+import { getNoteById, getComments, addComment, likeNote, collectNote, checkUserInteractions, followUser, deleteNote } from '@/lib/database';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -230,6 +230,32 @@ export default function NoteDetailScreen() {
     } catch (error) {
       console.error('Error collecting note:', error);
     }
+  };
+
+  
+  const handleDelete = () => {
+    Alert.alert(
+      "Delete Note",
+      "Are you sure you want to delete this note?",
+      [
+        { text: "Cancel", style: "cancel" },
+        { 
+          text: "Delete", 
+          style: "destructive", 
+          onPress: async () => {
+            if (!note) return;
+            try {
+              setLoading(true);
+              await deleteNote(note.id);
+              router.replace('/(tabs)/me');
+            } catch (error: any) {
+              Alert.alert("Error", "Failed to delete note");
+              setLoading(false);
+            }
+          }
+        }
+      ]
+    );
   };
 
   if (loading) {

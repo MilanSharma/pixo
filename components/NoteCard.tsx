@@ -1,21 +1,26 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, Image } from 'react-native';
-import { Heart } from 'lucide-react-native';
+import { Heart, Trash2 } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { Colors } from '@/constants/colors';
 import { Note } from '@/types';
 
 interface NoteCardProps {
   note: Note;
+  onLongPress?: (note: Note) => void;
+  onDelete?: (note: Note) => void;
 }
 
-export const NoteCard = ({ note }: NoteCardProps) => {
+export const NoteCard = ({ note, onLongPress, onDelete }: NoteCardProps) => {
   const router = useRouter();
   const [aspectRatio, setAspectRatio] = useState(3 / 4);
 
   useEffect(() => {
+    if (!note.media || note.media.length === 0) return;
+    
     const uri = note.media[0];
     if (!uri) return;
+
     Image.getSize(uri, (width, height) => {
       if (width && height) setAspectRatio(width / height);
     }, () => {});
@@ -26,9 +31,14 @@ export const NoteCard = ({ note }: NoteCardProps) => {
   };
 
   return (
-    <Pressable style={styles.container} onPress={handlePress}>
+    <Pressable 
+      style={styles.container} 
+      onPress={handlePress}
+      onLongPress={() => onLongPress && onLongPress(note)}
+      delayLongPress={500}
+    >
       <Image
-        source={{ uri: note.media[0] }}
+        source={{ uri: note.media && note.media.length > 0 ? note.media[0] : 'https://via.placeholder.com/150' }}
         style={[styles.image, { aspectRatio }]}
         resizeMode="cover"
       />
@@ -46,9 +56,17 @@ export const NoteCard = ({ note }: NoteCardProps) => {
               {note.user.username}
             </Text>
           </View>
-          <View style={styles.likesContainer}>
-            <Heart size={14} color={Colors.light.icon} />
-            <Text style={styles.likes}>{note.likes}</Text>
+          
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            {onDelete && (
+              <Pressable onPress={() => onDelete(note)} hitSlop={10}>
+                <Trash2 size={16} color={Colors.light.tint} />
+              </Pressable>
+            )}
+            <View style={styles.likesContainer}>
+              <Heart size={14} color={Colors.light.icon} />
+              <Text style={styles.likes}>{note.likes}</Text>
+            </View>
           </View>
         </View>
       </View>

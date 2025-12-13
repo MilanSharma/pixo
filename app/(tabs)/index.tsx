@@ -12,8 +12,10 @@ import { useAuth } from '@/context/AuthContext';
 import { LinearGradient } from 'expo-linear-gradient';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-
 const FEED_TABS = ['Following', 'For You'];
+
+// Helper to check for real Database IDs vs Mock IDs
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 interface DBNote {
   id: string;
@@ -97,69 +99,58 @@ export default function HomeScreen() {
   };
 
   const handleLike = async (noteId: string) => {
-    if (!user) {
-      Alert.alert('Login Required', 'Please login to like posts');
-      return;
+    // UI Update immediately
+    const isLiked = likedNotes.has(noteId);
+    const newLikedNotes = new Set(likedNotes);
+    if (isLiked) {
+      newLikedNotes.delete(noteId);
+    } else {
+      newLikedNotes.add(noteId);
     }
+    setLikedNotes(newLikedNotes);
 
-    try {
-      const isLiked = likedNotes.has(noteId);
-      
-      // Optimistic update for immediate feedback
-      const newLikedNotes = new Set(likedNotes);
-      if (isLiked) {
-        newLikedNotes.delete(noteId);
-      } else {
-        newLikedNotes.add(noteId);
+    setNotes(prevNotes =>
+      prevNotes.map(note =>
+        note.id === noteId
+          ? { ...note, likes: note.likes + (isLiked ? -1 : 1) }
+          : note
+      )
+    );
+
+    // Only call DB if it's a real UUID (not a mock ID like 'n1')
+    if (user && UUID_REGEX.test(noteId)) {
+      try {
+        await likeNote(user.id, noteId);
+      } catch (error) {
+        console.error('Error liking note:', error);
       }
-      setLikedNotes(newLikedNotes);
-
-      setNotes(prevNotes =>
-        prevNotes.map(note =>
-          note.id === noteId
-            ? { ...note, likes: note.likes + (isLiked ? -1 : 1) }
-            : note
-        )
-      );
-
-      // Perform actual DB call
-      await likeNote(user.id, noteId);
-      
-    } catch (error) {
-      console.error('Error liking note:', error);
-      // Revert if error (omitted for brevity, but good practice)
     }
   };
 
   const handleCollect = async (noteId: string) => {
-    if (!user) {
-      Alert.alert('Login Required', 'Please login to save posts');
-      return;
+    const isCollected = collectedNotes.has(noteId);
+    const newCollectedNotes = new Set(collectedNotes);
+    if (isCollected) {
+      newCollectedNotes.delete(noteId);
+    } else {
+      newCollectedNotes.add(noteId);
     }
+    setCollectedNotes(newCollectedNotes);
 
-    try {
-      const isCollected = collectedNotes.has(noteId);
-      
-      const newCollectedNotes = new Set(collectedNotes);
-      if (isCollected) {
-        newCollectedNotes.delete(noteId);
-      } else {
-        newCollectedNotes.add(noteId);
+    setNotes(prevNotes =>
+      prevNotes.map(note =>
+        note.id === noteId
+          ? { ...note, collects: note.collects + (isCollected ? -1 : 1) }
+          : note
+      )
+    );
+
+    if (user && UUID_REGEX.test(noteId)) {
+      try {
+        await collectNote(user.id, noteId);
+      } catch (error) {
+        console.error('Error collecting note:', error);
       }
-      setCollectedNotes(newCollectedNotes);
-
-      setNotes(prevNotes =>
-        prevNotes.map(note =>
-          note.id === noteId
-            ? { ...note, collects: note.collects + (isCollected ? -1 : 1) }
-            : note
-        )
-      );
-
-      await collectNote(user.id, noteId);
-
-    } catch (error) {
-      console.error('Error collecting note:', error);
     }
   };
 
@@ -167,9 +158,7 @@ export default function HomeScreen() {
     router.push(`/note/${noteId}`);
   };
 
-  const handleShare = () => {
-    // Share handled in ReelCard now, but this prop is kept if parent needs control
-  };
+  const handleShare = () => {};
 
   const handleSearchPress = () => {
     router.push('/search');
@@ -208,7 +197,6 @@ export default function HomeScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Header overlay with Gradient */}
       <View style={styles.headerContainer}>
         <LinearGradient
             colors={['rgba(0,0,0,0.6)', 'rgba(0,0,0,0)']}
@@ -232,7 +220,6 @@ export default function HomeScreen() {
         </LinearGradient>
       </View>
 
-      {/* Reels feed */}
       <FlatList
         ref={flatListRef}
         data={notes}

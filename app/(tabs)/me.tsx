@@ -6,7 +6,7 @@ import { Colors } from '@/constants/colors';
 import { MasonryList } from '@/components/MasonryList';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/context/AuthContext';
-import { getUserNotes, getUserCollections, getUserLikes } from '@/lib/database';
+import { getUserNotes, getUserCollections, getUserLikes, deleteNote } from '@/lib/database';
 import { useRouter } from 'expo-router';
 import { Note } from '@/types';
 
@@ -74,6 +74,31 @@ export default function MeScreen() {
     } finally {
       setLoading(false);
     }
+  };
+
+  
+  const handleDeleteNote = (targetNote: Note) => {
+    if (activeTab !== 'Notes') return;
+    Alert.alert(
+      "Delete Note",
+      "Are you sure you want to delete this note?",
+      [
+        { text: "Cancel", style: "cancel" },
+        { 
+          text: "Delete", 
+          style: "destructive", 
+          onPress: async () => {
+            try {
+              setNotes(prev => prev.filter(n => n.id !== targetNote.id));
+              await deleteNote(targetNote.id);
+            } catch (error) {
+              Alert.alert("Error", "Could not delete note");
+              loadUserData();
+            }
+          }
+        }
+      ]
+    );
   };
 
   const handleMenuPress = () => {
@@ -212,6 +237,8 @@ export default function MeScreen() {
           ListHeaderComponent={renderHeader()}
           refreshing={loading}
           onRefresh={loadUserData}
+          onLongPressItem={handleDeleteNote}
+          onDeleteItem={activeTab === 'Notes' ? handleDeleteNote : undefined}
         />
       )}
     </View>

@@ -373,3 +373,14 @@ export async function getUserConversations(userId: string) {
 
   return Array.from(conversationsMap.values());
 }
+
+
+export async function deleteNote(noteId: string) {
+  const { error } = await supabase
+    .from('notes')
+    .delete()
+    .eq('id', noteId);
+
+  if (error) throw error;
+  return true;
+}

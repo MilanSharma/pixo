@@ -272,7 +272,7 @@ export const MOCK_NOTES: Note[] = [
     title: 'Summer Outfit Ideas',
     description: 'Loving this new set! Perfect for a sunny day out. #ootd #summer #fashion',
     media: [
-      'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?q=80&w=600&auto=format&fit=crop',
+      'http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4',
       'https://images.unsplash.com/photo-1483985988355-763728e1935b?q=80&w=600&auto=format&fit=crop',
     ],
     tags: ['ootd', 'summer', 'fashion'],
@@ -289,7 +289,7 @@ export const MOCK_NOTES: Note[] = [
     title: 'Best Matcha in Town',
     description: 'Found this hidden gem in the city. The matcha latte is to die for! #cafe #matcha #foodie',
     media: [
-      'https://images.unsplash.com/photo-1515823064-d6e0c04616a7?q=80&w=600&auto=format&fit=crop',
+      'http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
     ],
     tags: ['cafe', 'matcha', 'foodie'],
     likes: 890,
@@ -305,7 +305,7 @@ export const MOCK_NOTES: Note[] = [
     title: 'My Desk Setup 2024',
     description: 'Minimalist desk setup for maximum productivity. What do you think? #desksetup #tech #minimalism',
     media: [
-      'https://images.unsplash.com/photo-1497215728101-856f4ea42174?q=80&w=600&auto=format&fit=crop',
+      'http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4',
       'https://images.unsplash.com/photo-1497366216548-37526070297c?q=80&w=600&auto=format&fit=crop',
     ],
     tags: ['desksetup', 'tech', 'minimalism'],
