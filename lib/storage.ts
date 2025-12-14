@@ -2,7 +2,9 @@ import { supabase } from './supabase';
 
 export async function uploadImage(userId: string, uri: string, filename: string): Promise<string> {
   const response = await fetch(uri);
-  const blob = await response.blob();
+  // Use arrayBuffer to ensure file data is fully read into memory before upload.
+  // This fixes 0-byte uploads often seen with Blobs in React Native + Supabase.
+  const arrayBuffer = await response.arrayBuffer();
   
   const filePath = `${userId}/${Date.now()}_${filename}`;
   
@@ -10,17 +12,14 @@ export async function uploadImage(userId: string, uri: string, filename: string)
   const ext = filename.split('.').pop()?.toLowerCase();
   let contentType = 'image/jpeg';
   if (ext === 'png') contentType = 'image/png';
+  if (ext === 'gif') contentType = 'image/gif';
+  if (ext === 'webp') contentType = 'image/webp';
   if (ext === 'mp4') contentType = 'video/mp4';
   if (ext === 'mov') contentType = 'video/quicktime';
   
-  // Use blob.type if available and valid
-  if (blob.type && blob.type !== 'application/octet-stream') {
-    contentType = blob.type;
-  }
-  
   const { error } = await supabase.storage
     .from('media')
-    .upload(filePath, blob, {
+    .upload(filePath, arrayBuffer, {
       contentType,
       upsert: false,
     });

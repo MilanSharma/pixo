@@ -1,15 +1,12 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 import { Product } from '@/types';
-
-interface CartItem extends Product {
-  quantity: number;
-}
+import { Alert } from 'react-native';
 
 interface CartContextType {
-  items: CartItem[];
+  items: Product[];
   addToCart: (product: Product) => void;
   removeFromCart: (productId: string) => void;
-  total: number;
+  isInCart: (productId: string) => boolean;
   count: number;
 }
 
@@ -17,20 +14,21 @@ const CartContext = createContext<CartContextType>({
   items: [],
   addToCart: () => {},
   removeFromCart: () => {},
-  total: 0,
+  isInCart: () => false,
   count: 0,
 });
 
 export function CartProvider({ children }: { children: ReactNode }) {
-  const [items, setItems] = useState<CartItem[]>([]);
+  const [items, setItems] = useState<Product[]>([]);
 
   const addToCart = (product: Product) => {
     setItems(current => {
-      const existing = current.find(i => i.id === product.id);
-      if (existing) {
-        return current.map(i => i.id === product.id ? { ...i, quantity: i.quantity + 1 } : i);
+      // Prevent duplicates in wishlist
+      if (current.find(i => i.id === product.id)) {
+        // Optional: Simple alert if already added, or just ignore
+        return current;
       }
-      return [...current, { ...product, quantity: 1 }];
+      return [...current, product];
     });
   };
 
@@ -38,11 +36,12 @@ export function CartProvider({ children }: { children: ReactNode }) {
     setItems(current => current.filter(i => i.id !== productId));
   };
 
-  const total = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-  const count = items.reduce((sum, item) => sum + item.quantity, 0);
+  const isInCart = (productId: string) => {
+      return items.some(i => i.id === productId);
+  };
 
   return (
-    <CartContext.Provider value={{ items, addToCart, removeFromCart, total, count }}>
+    <CartContext.Provider value={{ items, addToCart, removeFromCart, isInCart, count: items.length }}>
       {children}
     </CartContext.Provider>
   );

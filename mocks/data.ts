@@ -71,6 +71,7 @@ export const MOCK_PRODUCTS: Product[] = [
     description: 'The ultimate glow serum for all skin types.',
     brandName: 'Lumiere',
     brandLogo: 'https://images.unsplash.com/photo-1563694983011-6f4d90358083?q=80&w=200&auto=format&fit=crop',
+    externalUrl: 'https://www.amazon.com',
   },
   {
     id: 'p2',
@@ -81,6 +82,7 @@ export const MOCK_PRODUCTS: Product[] = [
     description: 'Timeless design for the modern individual.',
     brandName: 'Chrono',
     brandLogo: 'https://images.unsplash.com/photo-1495366691023-cc4eadcc2d79?q=80&w=200&auto=format&fit=crop',
+    externalUrl: 'https://www.amazon.com',
   },
   {
     id: 'p3',
@@ -91,6 +93,7 @@ export const MOCK_PRODUCTS: Product[] = [
     description: 'Durable and stylish for everyday use.',
     brandName: 'EcoCarry',
     brandLogo: 'https://images.unsplash.com/photo-1532561937392-7f2847a97626?q=80&w=200&auto=format&fit=crop',
+    externalUrl: 'https://www.amazon.com',
   },
   {
     id: 'p4',
@@ -101,6 +104,7 @@ export const MOCK_PRODUCTS: Product[] = [
     description: 'Noise cancelling headphones for immersive sound.',
     brandName: 'AudioTech',
     brandLogo: 'https://images.unsplash.com/photo-1550009158-9ebf69173e03?q=80&w=200&auto=format&fit=crop',
+    externalUrl: 'https://www.amazon.com',
   },
   {
     id: 'p5',
@@ -111,6 +115,7 @@ export const MOCK_PRODUCTS: Product[] = [
     description: 'Handcrafted ceramic mug for your morning brew.',
     brandName: 'HomeGoods',
     brandLogo: 'https://images.unsplash.com/photo-1513519245088-0e12902e35a6?q=80&w=200&auto=format&fit=crop',
+    externalUrl: 'https://www.amazon.com',
   },
   {
     id: 'p6',
@@ -121,6 +126,7 @@ export const MOCK_PRODUCTS: Product[] = [
     description: 'Genuine leather wallet with multiple card slots.',
     brandName: 'LeatherWorks',
     brandLogo: 'https://images.unsplash.com/photo-1559563458-52c69526c1c9?q=80&w=200&auto=format&fit=crop',
+    externalUrl: 'https://www.amazon.com',
   },
   {
     id: 'p7',
@@ -131,6 +137,7 @@ export const MOCK_PRODUCTS: Product[] = [
     description: 'Lightweight running shoes for optimal performance.',
     brandName: 'SportLife',
     brandLogo: 'https://images.unsplash.com/photo-1517649763962-0c623066013b?q=80&w=200&auto=format&fit=crop',
+    externalUrl: 'https://www.amazon.com',
   },
   {
     id: 'p8',
@@ -141,6 +148,7 @@ export const MOCK_PRODUCTS: Product[] = [
     description: 'Stylish sunglasses with UV protection.',
     brandName: 'SunShades',
     brandLogo: 'https://images.unsplash.com/photo-1516975080664-ed2fc6a32937?q=80&w=200&auto=format&fit=crop',
+    externalUrl: 'https://www.amazon.com',
   },
   {
     id: 'p9',
@@ -151,6 +159,7 @@ export const MOCK_PRODUCTS: Product[] = [
     description: 'Minimalist plant pot for indoor plants.',
     brandName: 'Greenery',
     brandLogo: 'https://images.unsplash.com/photo-1463936575229-469959cb6dbf?q=80&w=200&auto=format&fit=crop',
+    externalUrl: 'https://www.amazon.com',
   },
   {
     id: 'p10',
@@ -161,6 +170,7 @@ export const MOCK_PRODUCTS: Product[] = [
     description: 'Relaxing lavender scented candle.',
     brandName: 'CandleCo',
     brandLogo: 'https://images.unsplash.com/photo-1570535942468-b7ce55ac67cf?q=80&w=200&auto=format&fit=crop',
+    externalUrl: 'https://www.amazon.com',
   },
   {
     id: 'p11',
@@ -171,6 +181,7 @@ export const MOCK_PRODUCTS: Product[] = [
     description: 'Adjustable desk lamp for reading and work.',
     brandName: 'LightHouse',
     brandLogo: 'https://images.unsplash.com/photo-1580828343064-fde4fc206bc6?q=80&w=200&auto=format&fit=crop',
+    externalUrl: 'https://www.amazon.com',
   },
   {
     id: 'p12',
@@ -181,6 +192,7 @@ export const MOCK_PRODUCTS: Product[] = [
     description: 'Waterproof backpack with laptop compartment.',
     brandName: 'TravelGear',
     brandLogo: 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?q=80&w=200&auto=format&fit=crop',
+    externalUrl: 'https://www.amazon.com',
   },
   {
     id: 'p13',
@@ -191,6 +203,7 @@ export const MOCK_PRODUCTS: Product[] = [
     description: 'Non-slip yoga mat for all fitness levels.',
     brandName: 'ZenFit',
     brandLogo: 'https://images.unsplash.com/photo-1518611012118-696072aa579a?q=80&w=200&auto=format&fit=crop',
+    externalUrl: 'https://www.amazon.com',
   },
   {
     id: 'p14',
@@ -201,6 +214,7 @@ export const MOCK_PRODUCTS: Product[] = [
     description: 'Insulated water bottle keeps drinks cold for 24h.',
     brandName: 'HydroLife',
     brandLogo: 'https://images.unsplash.com/photo-1523362628745-0c100150b504?q=80&w=200&auto=format&fit=crop',
+    externalUrl: 'https://www.amazon.com',
   },
   {
     id: 'p15',
@@ -211,6 +225,7 @@ export const MOCK_PRODUCTS: Product[] = [
     description: 'Decorative throw pillow for couch or bed.',
     brandName: 'ComfortHome',
     brandLogo: 'https://images.unsplash.com/photo-1493663284031-b7e3aefcae8e?q=80&w=200&auto=format&fit=crop',
+    externalUrl: 'https://www.amazon.com',
   },
   {
     id: 'p16',
@@ -221,6 +236,7 @@ export const MOCK_PRODUCTS: Product[] = [
     description: 'Hardcover notebook with lined pages.',
     brandName: 'PaperCo',
     brandLogo: 'https://images.unsplash.com/photo-1517842645767-c639042777db?q=80&w=200&auto=format&fit=crop',
+    externalUrl: 'https://www.amazon.com',
   },
   {
     id: 'p17',
@@ -231,6 +247,7 @@ export const MOCK_PRODUCTS: Product[] = [
     description: 'Hydrating face cream with vitamins.',
     brandName: 'PureSkin',
     brandLogo: 'https://images.unsplash.com/photo-1571781565036-d3f7527ce721?q=80&w=200&auto=format&fit=crop',
+    externalUrl: 'https://www.amazon.com',
   },
   {
     id: 'p18',
@@ -241,6 +258,7 @@ export const MOCK_PRODUCTS: Product[] = [
     description: 'Porcelain tea set with pot and cups.',
     brandName: 'TeaTime',
     brandLogo: 'https://images.unsplash.com/photo-1556742393-d75f468bfcb0?q=80&w=200&auto=format&fit=crop',
+    externalUrl: 'https://www.amazon.com',
   },
   {
     id: 'p19',
@@ -251,6 +269,7 @@ export const MOCK_PRODUCTS: Product[] = [
     description: 'Small succulent pot for your desk.',
     brandName: 'LittleGreen',
     brandLogo: 'https://images.unsplash.com/photo-1502005229766-939760a7cb0d?q=80&w=200&auto=format&fit=crop',
+    externalUrl: 'https://www.amazon.com',
   },
   {
     id: 'p20',
@@ -261,6 +280,7 @@ export const MOCK_PRODUCTS: Product[] = [
     description: 'Silver hoop earrings with zircon stones.',
     brandName: 'JewelBox',
     brandLogo: 'https://images.unsplash.com/photo-1515562141207-7a88fb0521ed?q=80&w=200&auto=format&fit=crop',
+    externalUrl: 'https://www.amazon.com',
   }
 ];
 

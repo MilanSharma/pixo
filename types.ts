@@ -54,4 +54,5 @@ export interface Product {
   description: string;
   brandName: string;
   brandLogo: string;
+  externalUrl?: string;
 }

@@ -1,56 +1,115 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TextInput, Pressable, Alert } from 'react-native';
-import { Search, ShoppingBag, X } from 'lucide-react-native';
+import { useRouter } from 'expo-router';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, FlatList, TextInput, Pressable, Alert, ActivityIndicator, Animated } from 'react-native';
+import { Search, Heart, X } from 'lucide-react-native';
 import { Colors } from '@/constants/colors';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MOCK_PRODUCTS } from '@/mocks/data';
 import { ProductCard } from '@/components/ProductCard';
 import { Product } from '@/types';
 import { useCart } from '@/context/CartContext';
+import { getProducts } from '@/lib/database';
 
 export default function ShopScreen() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
-  const [filteredProducts, setFilteredProducts] = useState<Product[]>(MOCK_PRODUCTS);
-  const { count, total, items } = useCart();
+  const [products, setProducts] = useState<Product[]>([]);
+  const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { count } = useCart();
+  
+  // Animation value for the heart icon
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+
+  // Trigger animation when count increases
+  useEffect(() => {
+    if (count > 0) {
+      Animated.sequence([
+        Animated.spring(scaleAnim, {
+          toValue: 1.3,
+          useNativeDriver: true,
+          speed: 50,
+        }),
+        Animated.spring(scaleAnim, {
+          toValue: 1,
+          useNativeDriver: true,
+          speed: 50,
+        }),
+      ]).start();
+    }
+  }, [count]);
+
+  useEffect(() => {
+    loadProducts();
+  }, []);
+
+  const loadProducts = async () => {
+    try {
+      setLoading(true);
+      const data = await getProducts();
+      
+      if (data && data.length > 0) {
+        // Map DB columns to Product type
+        const mappedProducts: Product[] = data.map((p: any) => ({
+          id: p.id,
+          brandId: p.brand_id || 'unknown',
+          title: p.title,
+          price: p.price,
+          image: p.image_url || p.image || 'https://via.placeholder.com/300', 
+          description: p.description || '',
+          brandName: p.brand_name || 'Generic',
+          brandLogo: p.brand_logo || '',
+          externalUrl: p.external_url
+        }));
+        setProducts(mappedProducts);
+        setFilteredProducts(mappedProducts);
+      } else {
+        setProducts(MOCK_PRODUCTS);
+        setFilteredProducts(MOCK_PRODUCTS);
+      }
+    } catch (error) {
+      console.error('Failed to load products:', error);
+      setProducts(MOCK_PRODUCTS);
+      setFilteredProducts(MOCK_PRODUCTS);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleSearch = (query: string) => {
     setSearchQuery(query);
     if (query.trim()) {
-      const filtered = MOCK_PRODUCTS.filter(p => 
+      const filtered = products.filter(p => 
         p.title.toLowerCase().includes(query.toLowerCase()) ||
         p.brandName?.toLowerCase().includes(query.toLowerCase())
       );
       setFilteredProducts(filtered);
     } else {
-      setFilteredProducts(MOCK_PRODUCTS);
+      setFilteredProducts(products);
     }
   };
 
   const clearSearch = () => {
     setSearchQuery('');
-    setFilteredProducts(MOCK_PRODUCTS);
+    setFilteredProducts(products);
   };
 
   const handleSaleBannerPress = () => {
     Alert.alert('Summer Sale', 'Check out our special summer deals! Up to 50% off on selected items.');
   };
 
-  const handleCartPress = () => {
-    if (count === 0) {
-      Alert.alert('Cart', 'Your shopping cart is empty');
-    } else {
-      const itemList = items.map(i => `${i.quantity}x ${i.title}`).join('\n');
-      Alert.alert(
-        'Your Cart',
-        `${itemList}\n\nTotal: $${total.toFixed(2)}`,
-        [
-          { text: 'Close', style: 'cancel' },
-          { text: 'Checkout', onPress: () => Alert.alert('Checkout', 'Proceeding to checkout...') }
-        ]
-      );
-    }
+  const handleWishlistPress = () => {
+    router.push('/wishlist');
   };
+
+  if (loading) {
+    return (
+      <View style={[styles.container, styles.loadingContainer]}>
+        <ActivityIndicator size="large" color={Colors.light.tint} />
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -70,8 +129,10 @@ export default function ShopScreen() {
             </Pressable>
           )}
         </View>
-        <Pressable onPress={handleCartPress} style={styles.cartContainer}>
-          <ShoppingBag size={24} color={Colors.light.text} />
+        <Pressable onPress={handleWishlistPress} style={styles.cartContainer}>
+          <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+            <Heart size={24} color={Colors.light.text} fill={count > 0 ? Colors.light.tint : 'transparent'} stroke={count > 0 ? Colors.light.tint : Colors.light.text} />
+          </Animated.View>
           {count > 0 && (
             <View style={styles.badge}>
               <Text style={styles.badgeText}>{count > 99 ? '99+' : count}</Text>
@@ -108,6 +169,10 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.light.background,
   },
+  loadingContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -134,11 +199,13 @@ const styles = StyleSheet.create({
   cartContainer: {
     position: 'relative',
     padding: 4,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   badge: {
     position: 'absolute',
-    top: 0,
-    right: 0,
+    top: -2,
+    right: -2,
     backgroundColor: Colors.light.tint,
     borderRadius: 10,
     minWidth: 16,
@@ -146,10 +213,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 3,
+    borderWidth: 1.5,
+    borderColor: '#fff',
   },
   badgeText: {
     color: '#fff',
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: 'bold',
   },
   listContent: {

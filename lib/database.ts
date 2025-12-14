@@ -304,6 +304,25 @@ export async function getProducts(limit = 20) {
   return data;
 }
 
+export async function getProductById(id: string) {
+  const { data, error } = await supabase
+    .from('products')
+    .select(`
+      *,
+      profiles:user_id (
+        id,
+        username,
+        display_name,
+        avatar_url
+      )
+    `)
+    .eq('id', id)
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
 export async function getChatMessages(userId: string, otherUserId: string) {
   const { data, error } = await supabase
     .from('messages')
@@ -331,7 +350,6 @@ export async function sendMessage(senderId: string, receiverId: string, content:
 }
 
 export async function getUserConversations(userId: string) {
-  // Fetch all messages where user is sender or receiver
   const { data: messages, error } = await supabase
     .from('messages')
     .select(`
@@ -344,20 +362,18 @@ export async function getUserConversations(userId: string) {
 
   if (error) throw error;
 
-  // Group by the "other" user to get the latest message for each conversation
   const conversationsMap = new Map();
 
   messages.forEach((msg: any) => {
     const otherUser = msg.sender_id === userId ? msg.receiver : msg.sender;
     
-    // Safety check if user relation is missing
     if (!otherUser) return;
 
     const otherUserId = otherUser.id;
 
     if (!conversationsMap.has(otherUserId)) {
       conversationsMap.set(otherUserId, {
-        id: otherUserId, // Use other user's ID as conversation ID for simplicity in routing
+        id: otherUserId,
         user: {
             id: otherUser.id,
             username: otherUser.username || 'Unknown',
@@ -365,8 +381,8 @@ export async function getUserConversations(userId: string) {
         },
         lastMessage: msg.content,
         time: msg.created_at,
-        unread: 0, // Real unread count would require a separate 'read_at' field logic
-        sender_id: msg.sender_id // to check if last message was from me
+        unread: 0,
+        sender_id: msg.sender_id
       });
     }
   });

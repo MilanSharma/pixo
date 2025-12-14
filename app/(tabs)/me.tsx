@@ -9,10 +9,11 @@ import { useAuth } from '@/context/AuthContext';
 import { getUserNotes, getUserCollections, getUserLikes, deleteNote, collectNote, likeNote } from '@/lib/database';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Note } from '@/types';
-import { MOCK_NOTES } from '@/mocks/data'; // Import Mock Data
+import { MOCK_NOTES } from '@/mocks/data'; 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const TABS = ['Notes', 'Collects', 'Likes'];
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function transformDBNote(dbNote: any): Note {
   const profile = dbNote.profiles || { id: dbNote.user_id, username: 'Unknown', avatar_url: '' };
@@ -44,11 +45,10 @@ export default function MeScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [mockFollowingCount, setMockFollowingCount] = useState(0);
 
-  // Reload data silently when screen focuses
   useFocusEffect(
     React.useCallback(() => {
       if (user) {
-        refreshProfile(); // <--- Added this to force profile refresh
+        refreshProfile(); 
         loadUserData(false);
         countMockFollows();
       }
@@ -72,7 +72,6 @@ export default function MeScreen() {
     if (showSpinner) setIsRefreshing(true);
 
     try {
-      // 1. Load Real Data
       const [userNotes, userCollections, userLikes] = await Promise.all([
         getUserNotes(user.id),
         getUserCollections(user.id),
@@ -83,7 +82,7 @@ export default function MeScreen() {
       const realCollections = userCollections?.map(transformDBNote) || [];
       const realLikes = userLikes?.map(transformDBNote) || [];
 
-      // 2. Load Mock Data from Storage
+      // Load Mock Data
       const likedMockIdsStr = await AsyncStorage.getItem(`liked_mock_notes_${user.id}`);
       const collectedMockIdsStr = await AsyncStorage.getItem(`collected_mock_notes_${user.id}`);
 
@@ -93,7 +92,6 @@ export default function MeScreen() {
       const mockLikedNotes = MOCK_NOTES.filter(n => likedMockIds.includes(n.id));
       const mockCollectedNotes = MOCK_NOTES.filter(n => collectedMockIds.includes(n.id));
 
-      // 3. Merge & Set
       setNotes(realNotes);
       setCollectedNotes([...realCollections, ...mockCollectedNotes]);
       setLikedNotes([...realLikes, ...mockLikedNotes]);
@@ -105,13 +103,23 @@ export default function MeScreen() {
     }
   };
 
-
-
-
-
-
+  const handleShareProfile = async () => {
+    if (!profile) return;
+    try {
+      const url = `https://pixo.app/user/${profile.username}`;
+      await Share.share({
+        message: `Check out my profile on Pixo! @${profile.username} \n${url}`,
+        url: url,
+        title: 'Share Profile',
+      });
+    } catch (error) {
+      console.error('Error sharing profile:', error);
+    }
+  };
 
   const handleRemoveItem = (targetNote: Note) => {
+    if (!targetNote || !targetNote.id) return; 
+
     let title = "Remove Item";
     let message = "Are you sure?";
     let action = async () => { };
@@ -121,21 +129,43 @@ export default function MeScreen() {
       message = "Permanently delete this note?";
       action = async () => {
         setNotes(prev => prev.filter(n => n.id !== targetNote.id));
-        await deleteNote(targetNote.id);
+        if (UUID_REGEX.test(targetNote.id)) {
+            await deleteNote(targetNote.id);
+        }
       };
     } else if (activeTab === 'Collects') {
       title = "Remove from Collection";
       message = "Remove this note from your collection?";
       action = async () => {
         setCollectedNotes(prev => prev.filter(n => n.id !== targetNote.id));
-        await collectNote(user?.id || '', targetNote.id); // Toggles off
+        if (UUID_REGEX.test(targetNote.id)) {
+            await collectNote(user?.id || '', targetNote.id); 
+        } else {
+            const key = `collected_mock_notes_${user?.id}`;
+            const stored = await AsyncStorage.getItem(key);
+            if (stored) {
+                const list = JSON.parse(stored);
+                const newList = list.filter((id: string) => id !== targetNote.id);
+                await AsyncStorage.setItem(key, JSON.stringify(newList));
+            }
+        }
       };
     } else if (activeTab === 'Likes') {
       title = "Unlike Note";
       message = "Remove this note from your likes?";
       action = async () => {
         setLikedNotes(prev => prev.filter(n => n.id !== targetNote.id));
-        await likeNote(user?.id || '', targetNote.id); // Toggles off
+        if (UUID_REGEX.test(targetNote.id)) {
+            await likeNote(user?.id || '', targetNote.id); 
+        } else {
+            const key = `liked_mock_notes_${user?.id}`;
+            const stored = await AsyncStorage.getItem(key);
+            if (stored) {
+                const list = JSON.parse(stored);
+                const newList = list.filter((id: string) => id !== targetNote.id);
+                await AsyncStorage.setItem(key, JSON.stringify(newList));
+            }
+        }
       };
     }
 
@@ -148,72 +178,80 @@ export default function MeScreen() {
           try {
             await action();
           } catch (error) {
+            console.error(error);
             Alert.alert("Error", "Action failed.");
-            loadUserData(false); // Revert on error
+            loadUserData(false); 
           }
         }
       }
     ]);
   };
 
-  const renderHeader = () => (
-    <View style={styles.headerContainer}>
-      <View style={styles.topBar}>
-        <Pressable onPress={() => router.push('/user/menu')} style={styles.iconBtn}><Menu size={24} color={Colors.light.text} /></Pressable>
-        <View style={styles.topBarRight}>
-          <Pressable onPress={() => { }} style={styles.iconBtn}><Share2 size={24} color={Colors.light.text} /></Pressable>
-          <Pressable onPress={() => router.push('/user/settings')} style={styles.iconBtn}><Settings size={24} color={Colors.light.text} /></Pressable>
-        </View>
-      </View>
+  const renderHeader = () => {
+    // Generate avatar URI properly
+    const avatarUri = profile?.avatar_url 
+      ? profile.avatar_url 
+      : `https://ui-avatars.com/api/?name=${profile?.username || 'User'}&background=random`;
 
-      <View style={styles.profileInfo}>
-        <Image
-          key={profile?.avatar_url || 'default-avatar'}
-          source={{ uri: profile?.avatar_url || 'https://ui-avatars.com/api/?name=User' }}
-          style={styles.avatar}
-          cachePolicy="none"
-        />
-        <View style={styles.statsContainer}>
-          <View style={styles.statItem}>
-            <Text style={styles.statNumber}>{(profile?.following_count || 0) + mockFollowingCount}</Text>
-            <Text style={styles.statLabel}>Following</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Text style={styles.statNumber}>{profile?.followers_count || 0}</Text>
-            <Text style={styles.statLabel}>Followers</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Text style={styles.statNumber}>{profile?.likes_count || 0}</Text>
-            <Text style={styles.statLabel}>Likes</Text>
+    return (
+      <View style={styles.headerContainer}>
+        <View style={styles.topBar}>
+          <Pressable onPress={() => router.push('/user/menu')} style={styles.iconBtn}><Menu size={24} color={Colors.light.text} /></Pressable>
+          <View style={styles.topBarRight}>
+            <Pressable onPress={handleShareProfile} style={styles.iconBtn}><Share2 size={24} color={Colors.light.text} /></Pressable>
+            <Pressable onPress={() => router.push('/user/settings')} style={styles.iconBtn}><Settings size={24} color={Colors.light.text} /></Pressable>
           </View>
         </View>
-      </View>
 
-      <View style={styles.bioContainer}>
-        <Text style={styles.username}>{profile?.display_name || profile?.username}</Text>
-        <Text style={styles.handle}>@{profile?.username}</Text>
-        {profile?.bio && <Text style={styles.bio}>{profile.bio}</Text>}
-      </View>
+        <View style={styles.profileInfo}>
+          <Image
+            source={{ uri: avatarUri }}
+            style={styles.avatar}
+            contentFit="cover"
+            transition={500}
+          />
+          <View style={styles.statsContainer}>
+            <View style={styles.statItem}>
+              <Text style={styles.statNumber}>{(profile?.following_count || 0) + mockFollowingCount}</Text>
+              <Text style={styles.statLabel}>Following</Text>
+            </View>
+            <View style={styles.statItem}>
+              <Text style={styles.statNumber}>{profile?.followers_count || 0}</Text>
+              <Text style={styles.statLabel}>Followers</Text>
+            </View>
+            <View style={styles.statItem}>
+              <Text style={styles.statNumber}>{profile?.likes_count || 0}</Text>
+              <Text style={styles.statLabel}>Likes</Text>
+            </View>
+          </View>
+        </View>
 
-      <View style={styles.actionButtons}>
-        <Pressable style={styles.editButton} onPress={() => router.push('/user/edit')}>
-          <Text style={styles.editButtonText}>Edit Profile</Text>
-        </Pressable>
-        <Pressable style={styles.editButton} onPress={() => { }}>
-          <Text style={styles.editButtonText}>Share Profile</Text>
-        </Pressable>
-      </View>
+        <View style={styles.bioContainer}>
+          <Text style={styles.username}>{profile?.display_name || profile?.username}</Text>
+          <Text style={styles.handle}>@{profile?.username}</Text>
+          {profile?.bio && <Text style={styles.bio}>{profile.bio}</Text>}
+        </View>
 
-      <View style={styles.tabsRow}>
-        {TABS.map((tab) => (
-          <Pressable key={tab} onPress={() => setActiveTab(tab)} style={styles.tabItem}>
-            <Text style={[styles.tabText, activeTab === tab && styles.activeTabText]}>{tab}</Text>
-            {activeTab === tab && <View style={styles.activeIndicator} />}
+        <View style={styles.actionButtons}>
+          <Pressable style={styles.editButton} onPress={() => router.push('/user/edit')}>
+            <Text style={styles.editButtonText}>Edit Profile</Text>
           </Pressable>
-        ))}
+          <Pressable style={styles.editButton} onPress={handleShareProfile}>
+            <Text style={styles.editButtonText}>Share Profile</Text>
+          </Pressable>
+        </View>
+
+        <View style={styles.tabsRow}>
+          {TABS.map((tab) => (
+            <Pressable key={tab} onPress={() => setActiveTab(tab)} style={styles.tabItem}>
+              <Text style={[styles.tabText, activeTab === tab && styles.activeTabText]}>{tab}</Text>
+              {activeTab === tab && <View style={styles.activeIndicator} />}
+            </Pressable>
+          ))}
+        </View>
       </View>
-    </View>
-  );
+    );
+  };
 
   const displayNotes = activeTab === 'Notes' ? notes : activeTab === 'Collects' ? collectedNotes : likedNotes;
 
@@ -233,7 +271,6 @@ export default function MeScreen() {
         refreshing={isRefreshing}
         onRefresh={() => loadUserData(true)}
         onRemoveItem={handleRemoveItem}
-
         removeType={activeTab === 'Notes' ? 'delete' : 'remove'}
       />
     </View>

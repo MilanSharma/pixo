@@ -1,33 +1,76 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Alert, Share, Platform } from 'react-native';
+import * as WebBrowser from 'expo-web-browser';
+import React, { useEffect, useState, useRef } from 'react';
+import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Alert, Share, Platform, Animated } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { Image } from 'expo-image';
-import { ArrowLeft, Share as ShareIcon, Heart, ShoppingBag } from 'lucide-react-native';
+import { ArrowLeft, Share as ShareIcon, Heart, ShoppingBag, ExternalLink } from 'lucide-react-native';
 import { Colors } from '@/constants/colors';
 import { MOCK_PRODUCTS } from '@/mocks/data';
 import { Product } from '@/types';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCart } from '@/context/CartContext';
+import { getProductById } from '@/lib/database';
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export default function ProductDetailScreen() {
     const { id } = useLocalSearchParams();
+    const productId = Array.isArray(id) ? id[0] : id;
     const router = useRouter();
     const insets = useSafeAreaInsets();
-    const { addToCart } = useCart();
+    const { addToCart, isInCart } = useCart();
     
     const [product, setProduct] = useState<Product | null>(null);
     const [loading, setLoading] = useState(true);
     const [isSaved, setIsSaved] = useState(false);
+    
+    // Animation value for heart
+    const scaleAnim = useRef(new Animated.Value(1)).current;
 
     useEffect(() => {
-        if (id) {
-            const found = MOCK_PRODUCTS.find(p => p.id === id);
-            if (found) {
-                setProduct(found);
+        loadProduct();
+    }, [productId]);
+
+    useEffect(() => {
+        if (product && productId) {
+            setIsSaved(isInCart(productId));
+        }
+    }, [product, productId, isInCart]);
+
+    const loadProduct = async () => {
+        if (!productId) return;
+        setLoading(true);
+
+        try {
+            if (UUID_REGEX.test(productId)) {
+                // Fetch from DB
+                const data = await getProductById(productId);
+                if (data) {
+                    setProduct({
+                        id: data.id,
+                        brandId: data.brand_id || 'unknown',
+                        title: data.title,
+                        price: data.price,
+                        image: data.image_url || data.image || 'https://via.placeholder.com/300',
+                        description: data.description || '',
+                        brandName: data.brand_name || 'Generic',
+                        brandLogo: data.brand_logo || '',
+                        externalUrl: data.external_url 
+                    });
+                }
+            } else {
+                // Fetch from Mocks
+                const found = MOCK_PRODUCTS.find(p => p.id === productId);
+                if (found) setProduct(found);
             }
+        } catch (error) {
+            console.error(error);
+            const found = MOCK_PRODUCTS.find(p => p.id === productId);
+            if (found) setProduct(found);
+        } finally {
             setLoading(false);
         }
-    }, [id]);
+    };
 
     const handleBack = () => {
         if (router.canGoBack()) {
@@ -37,50 +80,60 @@ export default function ProductDetailScreen() {
         }
     };
 
+    const triggerHeartAnimation = () => {
+        Animated.sequence([
+            Animated.spring(scaleAnim, {
+                toValue: 1.3,
+                useNativeDriver: true,
+                speed: 50,
+            }),
+            Animated.spring(scaleAnim, {
+                toValue: 1,
+                useNativeDriver: true,
+                speed: 50,
+            }),
+        ]).start();
+    };
+
     const handleAddToCart = () => {
         if (product) {
             addToCart(product);
-            Alert.alert('Added', 'Item added to cart', [{ text: 'Keep Shopping' }, { text: 'Checkout', onPress: () => router.push('/checkout') }]);
+            setIsSaved(true);
+            triggerHeartAnimation();
         }
     };
 
-    const handleBuyNow = () => {
-        if (product) {
-            addToCart(product);
-            router.push('/checkout');
-        }
+    const handleBuyNow = async () => {
+        const url = product?.externalUrl || `https://www.amazon.com/s?k=${encodeURIComponent(product?.title || '')}`;
+        await WebBrowser.openBrowserAsync(url);
     };
 
     const handleShare = async () => {
         if (!product) return;
         try {
             const message = `Check out this ${product.title} on Pixo! - $${product.price}`;
-            const url = product.image; // Using image as placeholder link
+            const url = product.image; 
             
-            const result = await Share.share({
+            await Share.share({
                 message: Platform.OS === 'ios' ? message : `${message} ${url}`,
                 url: Platform.OS === 'ios' ? url : undefined,
                 title: 'Share Product'
             });
-
-            if (result.action === Share.dismissedAction) {
-                // dismissed
-            }
         } catch (error) {
-            // Fallback for environments where Share isn't supported nicely
-            Alert.alert('Share', `Check out ${product.title}!`);
+            // Ignored
         }
     };
 
     const handleSave = () => {
-        setIsSaved(!isSaved);
         if (!isSaved) {
-            Alert.alert('Saved', 'Product added to your wishlist.');
+            handleAddToCart();
+        } else {
+            // Optional: Handle remove from wishlist here if needed, but usually detail page just adds
+            setIsSaved(false);
         }
     };
 
     const handleGoToShop = () => {
-        // Use replace to jump to the tab without stacking
         router.replace('/(tabs)/shop');
     };
 
@@ -128,7 +181,7 @@ export default function ProductDetailScreen() {
                     <Text style={styles.title}>{product.title}</Text>
 
                     <View style={styles.brandContainer}>
-                        {product.brandLogo && <Image source={{ uri: product.brandLogo }} style={styles.brandLogo} />}
+                        {product.brandLogo ? <Image source={{ uri: product.brandLogo }} style={styles.brandLogo} /> : null}
                         <Text style={styles.brandName}>{product.brandName}</Text>
                     </View>
 
@@ -147,16 +200,19 @@ export default function ProductDetailScreen() {
                         <Text style={styles.footerIconText}>Shop</Text>
                     </Pressable>
                     <Pressable style={styles.footerIcon} onPress={handleSave}>
-                        <Heart size={24} color={isSaved ? Colors.light.tint : Colors.light.text} fill={isSaved ? Colors.light.tint : 'none'} />
+                        <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+                            <Heart size={24} color={isSaved ? Colors.light.tint : Colors.light.text} fill={isSaved ? Colors.light.tint : 'none'} />
+                        </Animated.View>
                         <Text style={styles.footerIconText}>Save</Text>
                     </Pressable>
                 </View>
                 <View style={styles.buttonActions}>
                     <Pressable style={styles.cartButton} onPress={handleAddToCart}>
-                        <Text style={styles.cartButtonText}>Add to Cart</Text>
+                        <Text style={styles.cartButtonText}>{isSaved ? 'Saved' : 'Save to Wishlist'}</Text>
                     </Pressable>
                     <Pressable style={styles.buyButton} onPress={handleBuyNow}>
-                        <Text style={styles.buyButtonText}>Buy Now</Text>
+                        <Text style={styles.buyButtonText}>Buy on Store</Text>
+                        <ExternalLink size={14} color="#fff" />
                     </Pressable>
                 </View>
             </View>
@@ -274,8 +330,8 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         paddingHorizontal: 16,
         paddingTop: 12,
-        zIndex: 100, // Ensure footer is on top
-        elevation: 10, // For Android
+        zIndex: 100, 
+        elevation: 10,
     },
     iconActions: {
         flexDirection: 'row',
@@ -316,6 +372,8 @@ const styles = StyleSheet.create({
         backgroundColor: Colors.light.tint,
         justifyContent: 'center',
         alignItems: 'center',
+        flexDirection: 'row',
+        gap: 6,
     },
     buyButtonText: {
         color: '#fff',

@@ -18,8 +18,6 @@ export const MasonryList = ({
   onRefresh, 
   refreshing, 
   ListHeaderComponent, 
-  
-  
   onRemoveItem,
   removeType
 }: MasonryListProps) => {
@@ -29,13 +27,15 @@ export const MasonryList = ({
     const col1: Note[] = [];
     const col2: Note[] = [];
 
-    data.forEach((item, index) => {
-      if (index % 2 === 0) {
-        col1.push(item);
-      } else {
-        col2.push(item);
-      }
-    });
+    if (data && Array.isArray(data)) {
+        data.forEach((item, index) => {
+            if (index % 2 === 0) {
+                col1.push(item);
+            } else {
+                col2.push(item);
+            }
+        });
+    }
 
     return [col1, col2];
   }, [data]);
