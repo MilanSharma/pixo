@@ -2,11 +2,10 @@ import React, { useRef, useMemo, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, Dimensions, Animated, Share } from 'react-native';
 import { Image } from 'expo-image';
 import { useVideoPlayer, VideoView } from 'expo-video';
-import { Heart, Bookmark, MessageCircle, Share2, MoreVertical, Volume2, VolumeX, Play, Pause } from 'lucide-react-native';
+import { Heart, Bookmark, MessageCircle, Share2, Volume2, VolumeX, Play, Pause, ShoppingBag } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { Note } from '@/types';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Colors } from '@/constants/colors';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -124,10 +123,44 @@ export const ReelCard = ({
         }
     };
 
+    const handleHashtagPress = (tag: string) => {
+        router.push(`/search?q=${encodeURIComponent(tag.replace('#', ''))}`);
+    };
+
+    const handleProductTagPress = () => {
+        if (note.productTags && note.productTags.length > 0) {
+            // Search for the first product tag
+            router.push(`/search?q=${encodeURIComponent(note.productTags[0])}`);
+        }
+    };
+
     const formatCount = (count: number) => {
         if (count >= 1000000) return `${(count / 1000000).toFixed(1)}M`;
         if (count >= 1000) return `${(count / 1000).toFixed(1)}K`;
         return count.toString();
+    };
+
+    // Parse description for hashtags
+    const renderDescription = (text: string) => {
+        const parts = text.split(/(\s+)/); // Split by whitespace capturing delimiters
+        return (
+            <Text style={styles.description} numberOfLines={3}>
+                {parts.map((part, index) => {
+                    if (part.startsWith('#')) {
+                        return (
+                            <Text
+                                key={index}
+                                style={styles.hashtag}
+                                onPress={() => handleHashtagPress(part)}
+                            >
+                                {part}
+                            </Text>
+                        );
+                    }
+                    return <Text key={index}>{part}</Text>;
+                })}
+            </Text>
+        );
     };
 
     return (
@@ -167,7 +200,7 @@ export const ReelCard = ({
                     pointerEvents="none"
                 />
 
-                {/* Mute Button (Bottom Right of Video Area) */}
+                {/* Mute Button */}
                 {isVideo && (
                     <Pressable
                         style={styles.muteButton}
@@ -220,12 +253,20 @@ export const ReelCard = ({
                     <Share2 size={28} color="#fff" strokeWidth={2} />
                     <Text style={styles.actionText}>Share</Text>
                 </Pressable>
-
-
             </View>
 
             {/* Bottom Info */}
             <View style={styles.infoContainer}>
+                {/* Product Tag Bubble */}
+                {note.productTags && note.productTags.length > 0 && (
+                    <Pressable style={styles.productTag} onPress={handleProductTagPress}>
+                        <ShoppingBag size={14} color="#fff" />
+                        <Text style={styles.productTagText}>
+                            Shop {note.productTags[0]} {note.productTags.length > 1 ? `+${note.productTags.length - 1}` : ''}
+                        </Text>
+                    </Pressable>
+                )}
+
                 <Pressable onPress={handleUserPress} style={styles.userInfo}>
                     <Image
                         key={`bottom-${note.user.avatar || 'avatar'}`}
@@ -235,8 +276,9 @@ export const ReelCard = ({
                     />
                     <Text style={styles.username}>@{note.user.username}</Text>
                 </Pressable>
+                
                 <Text style={styles.title} numberOfLines={2}>{note.title}</Text>
-                <Text style={styles.description} numberOfLines={3}>{note.description}</Text>
+                {renderDescription(note.description)}
             </View>
         </View>
     );
@@ -249,12 +291,11 @@ const styles = StyleSheet.create({
     centerIconContainer: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center', zIndex: 50 },
     bottomGradient: { position: 'absolute', left: 0, right: 0, bottom: 0, height: '50%' },
 
-    // Mute Button Styles
     muteButton: {
         position: 'absolute',
         alignSelf: 'center',
         top: '50%',
-        marginTop: 40, // Positioned just below the center play/pause icon
+        marginTop: 40,
         zIndex: 60,
     },
     muteIconWrapper: {
@@ -268,10 +309,30 @@ const styles = StyleSheet.create({
     userAvatar: { width: 48, height: 48, borderRadius: 24, borderWidth: 2, borderColor: '#fff', marginBottom: 10 },
     actionText: { color: '#fff', fontSize: 12, fontWeight: '600', textShadowColor: 'rgba(0,0,0,0.75)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 },
 
-    infoContainer: { position: 'absolute', left: 12, right: 80, bottom: 120, gap: 8, zIndex: 50 },
+    infoContainer: { position: 'absolute', left: 12, right: 80, bottom: 60, gap: 8, zIndex: 50, paddingBottom: 60 },
     userInfo: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
     bottomAvatar: { width: 32, height: 32, borderRadius: 16, borderWidth: 1.5, borderColor: '#fff' },
     username: { color: '#fff', fontSize: 15, fontWeight: '700', textShadowColor: 'rgba(0,0,0,0.75)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 },
     title: { color: '#fff', fontSize: 16, fontWeight: '700', lineHeight: 20, textShadowColor: 'rgba(0,0,0,0.75)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 },
     description: { color: '#fff', fontSize: 14, lineHeight: 18, textShadowColor: 'rgba(0,0,0,0.75)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 },
+    hashtag: { fontWeight: 'bold' },
+    
+    productTag: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(0,0,0,0.6)',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 16,
+        alignSelf: 'flex-start',
+        marginBottom: 8,
+        gap: 6,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.3)',
+    },
+    productTagText: {
+        color: '#fff',
+        fontSize: 12,
+        fontWeight: '600',
+    },
 });

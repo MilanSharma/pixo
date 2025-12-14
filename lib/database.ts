@@ -65,6 +65,34 @@ export async function createNote(userId: string, note: {
   return data;
 }
 
+// === NEW: Create Product ===
+export async function createProduct(userId: string, product: {
+  title: string;
+  description?: string;
+  price: number;
+  image: string;
+  brandName?: string;
+  externalUrl?: string;
+}) {
+  const { data, error } = await supabase
+    .from('products')
+    .insert({
+      user_id: userId,
+      title: product.title,
+      description: product.description,
+      price: product.price,
+      image: product.image,
+      brand_name: product.brandName,
+      external_url: product.externalUrl,
+      in_stock: true
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
 export async function likeNote(userId: string, noteId: string) {
   const { error: likeError } = await supabase
     .from('likes')
@@ -414,4 +442,22 @@ export async function getFollowStatus(followerId: string, followingId: string) {
      return false;
   }
   return !!data;
+}
+
+export async function getNotifications(userId: string) {
+  const { data, error } = await supabase
+    .from('notifications')
+    .select(`
+      *,
+      actor:profiles!notifications_actor_id_fkey (
+        id,
+        username,
+        avatar_url
+      )
+    `)
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+  return data;
 }

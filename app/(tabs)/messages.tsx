@@ -5,48 +5,47 @@ import { Colors } from '@/constants/colors';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
-import { getUserConversations } from '@/lib/database';
+import { getUserConversations, getNotifications } from '@/lib/database';
 import { supabase } from '@/lib/supabase';
 import { MOCK_USERS } from '@/mocks/data';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Heart, MessageCircle, UserPlus } from 'lucide-react-native';
 
 const TABS = ['Notifications', 'Chats'];
-const MOCK_NOTIFICATIONS = [
-  { id: '1', type: 'like', user: { username: 'fashion_daily', avatar: 'https://github.com/shadcn.png' }, text: 'liked your note.', time: '2m' },
-];
 
 export default function MessagesScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('Chats');
-  const [chats, setChats] = useState<any[]>([]);
   
-  // State for different loading types
-  const [isRefreshing, setIsRefreshing] = useState(false); // For pull-to-refresh
-  const [isInitialLoad, setIsInitialLoad] = useState(true); // For first mount
+  // Data State
+  const [chats, setChats] = useState<any[]>([]);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  
+  // Loading State
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
 
   useFocusEffect(
     React.useCallback(() => {
-        if (user && activeTab === 'Chats') {
-            // Pass false to not trigger the pull-down spinner on tab switch
-            loadChats(false);
+        if (user) {
+            if (activeTab === 'Chats') {
+                loadChats(false);
+            } else {
+                loadNotifications(false);
+            }
         }
     }, [user, activeTab])
   );
 
   const loadChats = async (showSpinner = false) => {
     if (!user) return;
-    
-    if (showSpinner) {
-        setIsRefreshing(true);
-    }
+    if (showSpinner) setIsRefreshing(true);
 
     try {
-      // 1. Load Real Chats
       const dbChats = await getUserConversations(user.id);
       
-      // 2. Load Mock Chats from AsyncStorage
       const allKeys = await AsyncStorage.getAllKeys();
       const chatKeys = allKeys.filter(k => k.startsWith(`mock_chat_${user.id}_`));
       
@@ -79,6 +78,21 @@ export default function MessagesScreen() {
     }
   };
 
+  const loadNotifications = async (showSpinner = false) => {
+      if (!user) return;
+      if (showSpinner) setIsRefreshing(true);
+      
+      try {
+          const data = await getNotifications(user.id);
+          setNotifications(data || []);
+      } catch (error) {
+          console.error("Error loading notifications", error);
+      } finally {
+          setIsRefreshing(false);
+          setIsInitialLoad(false);
+      }
+  };
+
   const handleChatPress = (userId: string) => {
     router.push(`/chat/${userId}`);
   };
@@ -102,6 +116,54 @@ export default function MessagesScreen() {
     </Pressable>
   );
 
+  const getNotificationIcon = (type: string) => {
+      switch(type) {
+          case 'like': return <Heart size={16} color="#fff" fill="#fff" />;
+          case 'comment': return <MessageCircle size={16} color="#fff" fill="#fff" />;
+          case 'follow': return <UserPlus size={16} color="#fff" fill="#fff" />;
+          default: return <MessageCircle size={16} color="#fff" />;
+      }
+  };
+
+  const getNotificationColor = (type: string) => {
+      switch(type) {
+          case 'like': return '#ff4757';
+          case 'comment': return '#3b82f6';
+          case 'follow': return '#2ed573';
+          default: return '#999';
+      }
+  };
+
+  const getNotificationText = (item: any) => {
+      switch(item.type) {
+          case 'like': return 'liked your post.';
+          case 'comment': return `commented: "${item.content}"`;
+          case 'follow': return 'started following you.';
+          default: return 'interacted with you.';
+      }
+  };
+
+  const renderNotification = ({ item }: any) => (
+      <View style={styles.notificationItem}>
+          <View style={styles.notifAvatarContainer}>
+              <Image source={{ uri: item.actor?.avatar_url || 'https://ui-avatars.com/api/?name=User' }} style={styles.chatAvatar} />
+              <View style={[styles.notifIconBadge, { backgroundColor: getNotificationColor(item.type) }]}>
+                  {getNotificationIcon(item.type)}
+              </View>
+          </View>
+          <View style={styles.notifContent}>
+              <Text style={styles.notifText}>
+                  <Text style={styles.notifUsername}>{item.actor?.username} </Text>
+                  {getNotificationText(item)}
+              </Text>
+              <Text style={styles.notifTime}>{new Date(item.created_at).toLocaleDateString()}</Text>
+          </View>
+          {item.type !== 'follow' && (
+             <View style={styles.notifImagePlaceholder} /> 
+          )}
+      </View>
+  );
+
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
@@ -116,7 +178,7 @@ export default function MessagesScreen() {
         ))}
       </View>
       
-      {activeTab === 'Chats' && (
+      {activeTab === 'Chats' ? (
         isInitialLoad && chats.length === 0 ? (
             <View style={styles.center}>
                 <ActivityIndicator size="large" color={Colors.light.tint} />
@@ -132,9 +194,23 @@ export default function MessagesScreen() {
               onRefresh={() => loadChats(true)}
             />
         )
+      ) : (
+        isInitialLoad && notifications.length === 0 ? (
+            <View style={styles.center}>
+                <ActivityIndicator size="large" color={Colors.light.tint} />
+            </View>
+        ) : (
+            <FlatList
+              data={notifications}
+              keyExtractor={(item) => item.id}
+              renderItem={renderNotification}
+              contentContainerStyle={styles.listContent}
+              ListEmptyComponent={<Text style={styles.emptyText}>No notifications yet.</Text>}
+              refreshing={isRefreshing}
+              onRefresh={() => loadNotifications(true)}
+            />
+        )
       )}
-      
-      {activeTab === 'Notifications' && <Text style={styles.emptyText}>No notifications.</Text>}
     </View>
   );
 }
@@ -159,5 +235,14 @@ const styles = StyleSheet.create({
   chatFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   lastMessage: { fontSize: 14, color: '#666', flex: 1, marginRight: 8 },
   unreadMessage: { color: Colors.light.text, fontWeight: '600' },
-  emptyText: { textAlign: 'center', color: '#999', marginTop: 40 }
+  emptyText: { textAlign: 'center', color: '#999', marginTop: 40 },
+  
+  notificationItem: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
+  notifAvatarContainer: { position: 'relative', marginRight: 12 },
+  notifIconBadge: { position: 'absolute', bottom: -2, right: -2, width: 20, height: 20, borderRadius: 10, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#fff' },
+  notifContent: { flex: 1 },
+  notifText: { fontSize: 14, color: '#333', lineHeight: 20 },
+  notifUsername: { fontWeight: 'bold' },
+  notifTime: { fontSize: 12, color: '#999', marginTop: 2 },
+  notifImagePlaceholder: { width: 40, height: 40, backgroundColor: '#f0f0f0', borderRadius: 4, marginLeft: 8 },
 });

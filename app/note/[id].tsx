@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, Dimensions, TextInput, Platform, KeyboardAvoidingView, ActivityIndicator, Alert, Pressable, Image } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Dimensions, TextInput, Platform, KeyboardAvoidingView, ActivityIndicator, Alert, Pressable, Share } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { Heart, MessageCircle, Star, Share2, ChevronLeft, Send, Trash2 } from 'lucide-react-native';
 import { Colors } from '@/constants/colors';
@@ -9,6 +9,7 @@ import { Comment, Note } from '@/types';
 import { useAuth } from '@/context/AuthContext';
 import { getNoteById, getComments, addComment, likeNote, collectNote, checkUserInteractions, followUser, deleteNote, getFollowStatus } from '@/lib/database';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Image } from 'expo-image';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -29,7 +30,7 @@ export default function NoteDetailScreen() {
   const noteId = Array.isArray(id) ? id[0] : id;
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { user } = useAuth();
+  const { user, profile } = useAuth(); // Destructure profile here
   
   const [note, setNote] = useState<Note | null>(null);
   const [loading, setLoading] = useState(true);
@@ -175,6 +176,12 @@ export default function NoteDetailScreen() {
     }
   };
 
+  const handleUserPress = () => {
+    if (note && note.userId) {
+        router.push(`/user/${note.userId}`);
+    }
+  };
+
   const handleTagPress = (tag: string) => {
     router.push(`/search?q=${encodeURIComponent(tag)}`);
   };
@@ -219,13 +226,17 @@ export default function NoteDetailScreen() {
             }
         } else {
             // Mock Comment
+            // Use profile data if available, fallback to defaults
+            const username = profile?.username || 'user';
+            const avatar = profile?.avatar_url || `https://ui-avatars.com/api/?name=${username}`;
+
             const newMockComment: Comment = {
                 id: Date.now().toString(),
                 noteId: note.id,
                 user: {
                     id: user.id,
-                    username: 'you', // Or fetch from profile context if available
-                    avatar: 'https://ui-avatars.com/api/?name=You',
+                    username: username,
+                    avatar: avatar,
                     followers: 0, following: 0, likes: 0, collects: 0
                 },
                 text: text,
@@ -333,6 +344,19 @@ export default function NoteDetailScreen() {
     );
   };
 
+  const handleShare = async () => {
+    if (!note) return;
+    try {
+        await Share.share({
+            message: `Check out ${note.title} by @${note.user.username} on Pixo!`,
+            url: note.media[0] || undefined,
+            title: note.title
+        });
+    } catch (error) {
+        console.error("Share error:", error);
+    }
+  };
+
   if (loading) {
     return (
       <View style={[styles.container, styles.loadingContainer]}>
@@ -359,7 +383,7 @@ export default function NoteDetailScreen() {
       <Stack.Screen options={{ headerShown: false }} />
       
       <View style={[styles.header, { paddingTop: insets.top }]}>
-        <Pressable onPress={() => router.canGoBack() ? router.back() : router.replace('/')}>
+        <Pressable onPress={() => router.canGoBack() ? router.back() : router.replace('/')} style={styles.backButton}>
           <ChevronLeft size={28} color={Colors.light.text} />
         </Pressable>
         
@@ -369,141 +393,146 @@ export default function NoteDetailScreen() {
               <Trash2 size={24} color={Colors.light.tint} />
             </Pressable>
           )}
-          <Pressable>
+          <Pressable onPress={handleShare}>
             <Share2 size={24} color={Colors.light.text} />
           </Pressable>
         </View>
       </View>
 
-      <ScrollView 
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 100 }}
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === "ios" ? "padding" : "height"} 
+        style={{ flex: 1 }}
+        keyboardVerticalOffset={0} 
       >
-        <View style={styles.carouselContainer}>
-          <ScrollView
-            horizontal
-            pagingEnabled
-            showsHorizontalScrollIndicator={false}
-            onScroll={handleScroll}
-            scrollEventThrottle={16}
-          >
-            {note.media.map((uri, index) => (
-              <Image
-                key={index}
-                source={{ uri }}
-                style={styles.carouselImage}
-                contentFit="cover"
-              />
-            ))}
-          </ScrollView>
-          
-          {note.media.length > 1 && (
-            <View style={styles.pagination}>
-              {note.media.map((_, index) => (
-                <View
+        <ScrollView 
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: 100 }}
+        >
+          <View style={styles.carouselContainer}>
+            <ScrollView
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              onScroll={handleScroll}
+              scrollEventThrottle={16}
+            >
+              {note.media.map((uri, index) => (
+                <Image
                   key={index}
-                  style={[
-                    styles.paginationDot,
-                    activeImageIndex === index && styles.paginationDotActive
-                  ]}
+                  source={{ uri }}
+                  style={styles.carouselImage}
+                  contentFit="cover"
                 />
               ))}
-            </View>
-          )}
-        </View>
-
-        <View style={styles.contentContainer}>
-          <Text style={styles.title}>{note.title}</Text>
-          
-          <View style={styles.userInfo}>
-            <Image
-              source={{ uri: note.user.avatar }}
-              style={styles.avatar}
-            />
-            <View style={styles.userMeta}>
-              <Text style={styles.username}>{note.user.username}</Text>
-              {note.location && (
-                <Text style={styles.location}>{note.location}</Text>
-              )}
-            </View>
-            <Pressable 
-              style={[styles.followButton, isFollowing && styles.followingButton]} 
-              onPress={handleFollow}
-            >
-              <Text style={[styles.followButtonText, isFollowing && styles.followingButtonText]}>
-                {isFollowing ? 'Following' : 'Follow'}
-              </Text>
-            </Pressable>
-          </View>
-
-          <Text style={styles.description}>{note.description}</Text>
-          
-          <View style={styles.tagsContainer}>
-            {note.tags.map(tag => (
-              <Pressable key={tag} onPress={() => handleTagPress(tag)}>
-                <Text style={styles.tag}>#{tag}</Text>
-              </Pressable>
-            ))}
-          </View>
-          
-          <Text style={styles.date}>
-             {new Date(note.createdAt).toLocaleDateString()} {note.location ? `• ${note.location}` : ''}
-          </Text>
-
-          <View style={styles.divider} />
-          
-          <Text style={styles.commentsTitle}>Comments ({comments.length})</Text>
-
-          {comments.map(comment => (
-            <View key={comment.id} style={styles.commentItem}>
-              <Image source={{ uri: comment.user.avatar }} style={styles.commentAvatar} />
-              <View style={styles.commentContent}>
-                <Text style={styles.commentUsername}>{comment.user.username}</Text>
-                <Text style={styles.commentText}>{comment.text}</Text>
+            </ScrollView>
+            
+            {note.media.length > 1 && (
+              <View style={styles.pagination}>
+                {note.media.map((_, index) => (
+                  <View
+                    key={index}
+                    style={[
+                      styles.paginationDot,
+                      activeImageIndex === index && styles.paginationDotActive
+                    ]}
+                  />
+                ))}
               </View>
-            </View>
-          ))}
-          
-          {comments.length === 0 && (
-            <Text style={styles.noComments}>Be the first to comment!</Text>
-          )}
-        </View>
-      </ScrollView>
+            )}
+          </View>
 
-      <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
-        style={[styles.bottomBar, { paddingBottom: insets.bottom || 10 }]}
-      >
-        <View style={styles.inputContainer}>
-          <TextInput
-            placeholder="Say something..."
-            style={styles.input}
-            value={commentText}
-            onChangeText={setCommentText}
-          />
-          {commentText.length > 0 && (
-            <Pressable onPress={handleAddComment}>
-               <Send size={20} color={Colors.light.tint} />
+          <View style={styles.contentContainer}>
+            <Text style={styles.title}>{note.title}</Text>
+            
+            <View style={styles.userInfo}>
+              <Pressable onPress={handleUserPress} style={{flexDirection: 'row', alignItems: 'center', flex: 1}}>
+                  <Image
+                    source={{ uri: note.user.avatar }}
+                    style={styles.avatar}
+                  />
+                  <View style={styles.userMeta}>
+                    <Text style={styles.username}>{note.user.username}</Text>
+                    {note.location && (
+                      <Text style={styles.location}>{note.location}</Text>
+                    )}
+                  </View>
+              </Pressable>
+              
+              <Pressable 
+                style={[styles.followButton, isFollowing && styles.followingButton]} 
+                onPress={handleFollow}
+              >
+                <Text style={[styles.followButtonText, isFollowing && styles.followingButtonText]}>
+                  {isFollowing ? 'Following' : 'Follow'}
+                </Text>
+              </Pressable>
+            </View>
+
+            <Text style={styles.description}>{note.description}</Text>
+            
+            <View style={styles.tagsContainer}>
+              {note.tags.map(tag => (
+                <Pressable key={tag} onPress={() => handleTagPress(tag)}>
+                  <Text style={styles.tag}>#{tag}</Text>
+                </Pressable>
+              ))}
+            </View>
+            
+            <Text style={styles.date}>
+               {new Date(note.createdAt).toLocaleDateString()} {note.location ? `• ${note.location}` : ''}
+            </Text>
+
+            <View style={styles.divider} />
+            
+            <Text style={styles.commentsTitle}>Comments ({comments.length})</Text>
+
+            {comments.map(comment => (
+              <View key={comment.id} style={styles.commentItem}>
+                <Image source={{ uri: comment.user.avatar }} style={styles.commentAvatar} />
+                <View style={styles.commentContent}>
+                  <Text style={styles.commentUsername}>{comment.user.username}</Text>
+                  <Text style={styles.commentText}>{comment.text}</Text>
+                </View>
+              </View>
+            ))}
+            
+            {comments.length === 0 && (
+              <Text style={styles.noComments}>Be the first to comment!</Text>
+            )}
+          </View>
+        </ScrollView>
+
+        <View style={[styles.bottomBar, { paddingBottom: insets.bottom || 10 }]}>
+          <View style={styles.inputContainer}>
+            <TextInput
+              placeholder="Say something..."
+              style={styles.input}
+              value={commentText}
+              onChangeText={setCommentText}
+            />
+            {commentText.length > 0 && (
+              <Pressable onPress={handleAddComment}>
+                 <Send size={20} color={Colors.light.tint} />
+              </Pressable>
+            )}
+          </View>
+          
+          <View style={styles.actions}>
+            <Pressable style={styles.actionButton} onPress={handleLike}>
+              <Heart size={24} color={isLiked ? Colors.light.tint : Colors.light.text} fill={isLiked ? Colors.light.tint : 'none'} />
+              <Text style={styles.actionText}>{likesCount}</Text>
             </Pressable>
-          )}
-        </View>
-        
-        <View style={styles.actions}>
-          <Pressable style={styles.actionButton} onPress={handleLike}>
-            <Heart size={24} color={isLiked ? Colors.light.tint : Colors.light.text} fill={isLiked ? Colors.light.tint : 'none'} />
-            <Text style={styles.actionText}>{likesCount}</Text>
-          </Pressable>
-          
-          <Pressable style={styles.actionButton} onPress={handleCollect}>
-            <Star size={24} color={isCollected ? '#FFD700' : Colors.light.text} fill={isCollected ? '#FFD700' : 'none'} />
-            <Text style={styles.actionText}>{collectsCount}</Text>
-          </Pressable>
-          
-          <Pressable style={styles.actionButton}>
-            <MessageCircle size={24} color={Colors.light.text} />
-            <Text style={styles.actionText}>{comments.length}</Text>
-          </Pressable>
+            
+            <Pressable style={styles.actionButton} onPress={handleCollect}>
+              <Star size={24} color={isCollected ? '#FFD700' : Colors.light.text} fill={isCollected ? '#FFD700' : 'none'} />
+              <Text style={styles.actionText}>{collectsCount}</Text>
+            </Pressable>
+            
+            <Pressable style={styles.actionButton}>
+              <MessageCircle size={24} color={Colors.light.text} />
+              <Text style={styles.actionText}>{comments.length}</Text>
+            </Pressable>
+          </View>
         </View>
       </KeyboardAvoidingView>
     </View>
@@ -534,9 +563,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 10,
   },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   headerRight: {
     flexDirection: 'row',
     gap: 16,
+    backgroundColor: 'rgba(255,255,255,0.7)',
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    alignItems: 'center',
   },
   carouselContainer: {
     height: 450,
@@ -680,10 +722,6 @@ const styles = StyleSheet.create({
     marginBottom: 40,
   },
   bottomBar: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
     backgroundColor: '#fff',
     borderTopWidth: 1,
     borderTopColor: '#eee',
@@ -691,7 +729,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingTop: 10,
-    height: 80,
+    minHeight: 80,
   },
   inputContainer: {
     flex: 1,

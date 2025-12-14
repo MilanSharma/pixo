@@ -1,14 +1,14 @@
-import React, { useMemo, useRef, useState } from 'react';
-import { View, Text, StyleSheet, TextInput, Pressable, ScrollView, Alert, ActivityIndicator, Modal, PanResponder, Image } from 'react-native';
+import React, { useMemo, useRef, useState, useEffect } from 'react';
+import { View, Text, StyleSheet, TextInput, Pressable, ScrollView, Alert, ActivityIndicator, Modal, PanResponder, Image, KeyboardAvoidingView, Platform } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { Camera, MapPin, X, SlidersHorizontal, Tag, Search, Check, Play, Film } from 'lucide-react-native';
+import { Camera, MapPin, X, SlidersHorizontal, Tag, Search, Check, Play, Film, ShoppingBag, Link } from 'lucide-react-native';
 import { Colors } from '@/constants/colors';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
-import { uploadMultipleImages } from '@/lib/storage';
-import { createNote } from '@/lib/database';
-import { MOCK_PRODUCTS } from '@/mocks/data';
+import { uploadMultipleImages, uploadImage } from '@/lib/storage';
+import { createNote, getProducts, createProduct } from '@/lib/database';
+import { Product } from '@/types';
 
 const ITEM_WIDTH = 120;
 
@@ -22,6 +22,10 @@ export default function CreateScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user } = useAuth();
+  
+  const [createMode, setCreateMode] = useState<'story' | 'product'>('story');
+  
+  // --- STORY STATE ---
   const [media, setMedia] = useState<MediaItem[]>([]);
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
   const [title, setTitle] = useState('');
@@ -29,13 +33,60 @@ export default function CreateScreen() {
   const [descHeight, setDescHeight] = useState(160);
   const [location, setLocation] = useState('');
   const [productTags, setProductTags] = useState<string[]>([]);
+  
+  // --- PRODUCT STATE ---
+  const [prodImage, setProdImage] = useState<string | null>(null);
+  const [prodTitle, setProdTitle] = useState('');
+  const [prodPrice, setProdPrice] = useState('');
+  const [prodBrand, setProdBrand] = useState('');
+  const [prodLink, setProdLink] = useState('');
+  const [prodDesc, setProdDesc] = useState('');
+
+  // --- SHARED ---
   const [isPublishing, setIsPublishing] = useState(false);
   const [editorVisible, setEditorVisible] = useState(false);
   const [editorTab, setEditorTab] = useState<'Crop' | 'Filter' | 'Tags'>('Crop');
   const [locationModalVisible, setLocationModalVisible] = useState(false);
   const [locationInput, setLocationInput] = useState('');
+  
+  // Product Tagging State
   const [productModalVisible, setProductModalVisible] = useState(false);
   const [productQuery, setProductQuery] = useState('');
+  const [availableProducts, setAvailableProducts] = useState<Product[]>([]);
+
+  useEffect(() => {
+    loadProductsForTagging();
+  }, []);
+
+  const loadProductsForTagging = async () => {
+    try {
+      const data = await getProducts(100); 
+      if (data) {
+        const mapped: Product[] = data.map((p: any) => ({
+          id: p.id,
+          brandId: 'unknown',
+          title: p.title,
+          price: p.price,
+          image: p.image,
+          description: p.description,
+          brandName: p.brand_name,
+          brandLogo: p.brand_logo,
+          externalUrl: p.external_url
+        }));
+        setAvailableProducts(mapped);
+      }
+    } catch (e) {
+      console.error("Failed to load products for tagging", e);
+    }
+  };
+
+  const productResults = useMemo(() => {
+    if (!productQuery.trim()) return availableProducts.slice(0, 10);
+    return availableProducts.filter(p => 
+      p.title.toLowerCase().includes(productQuery.toLowerCase()) || 
+      (p.brandName && p.brandName.toLowerCase().includes(productQuery.toLowerCase()))
+    ).slice(0, 10);
+  }, [productQuery, availableProducts]);
 
   const panResponder = useMemo(() => PanResponder.create({
     onStartShouldSetPanResponder: () => draggingIndex !== null,
@@ -60,7 +111,7 @@ export default function CreateScreen() {
       allowsMultipleSelection: true,
       selectionLimit: 9 - media.length,
       quality: 1,
-      videoMaxDuration: 60, // Limit videos to 60 seconds
+      videoMaxDuration: 60, 
     });
 
     if (!result.canceled) {
@@ -70,6 +121,19 @@ export default function CreateScreen() {
         duration: a.duration
       }));
       setMedia(prev => [...prev, ...newItems].slice(0, 9));
+    }
+  };
+
+  const pickProductImage = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: 'images',
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+
+    if (!result.canceled) {
+      setProdImage(result.assets[0].uri);
     }
   };
 
@@ -89,18 +153,25 @@ export default function CreateScreen() {
 
   const handlePublish = async () => {
     if (!user) {
-      Alert.alert('Sign In Required', 'Please sign in to create a note', [
+      Alert.alert('Sign In Required', 'Please sign in to create', [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Sign In', onPress: () => router.push('/auth/login') },
       ]);
       return;
     }
+
+    if (createMode === 'story') {
+        await publishStory();
+    } else {
+        await publishProduct();
+    }
+  };
+
+  const publishStory = async () => {
     if (media.length === 0) {
       Alert.alert('Error', 'Please add at least one photo or video');
       return;
     }
-
-    // Explicit trim and check
     const cleanTitle = title.trim();
     if (cleanTitle.length === 0) {
       Alert.alert('Error', 'Please add a title to your note');
@@ -117,9 +188,9 @@ export default function CreateScreen() {
         };
       });
 
-      const uploadedUrls = await uploadMultipleImages(user.id, uploadFiles);
+      const uploadedUrls = await uploadMultipleImages(user!.id, uploadFiles);
 
-      await createNote(user.id, {
+      await createNote(user!.id, {
         title: cleanTitle,
         content: description.trim(),
         images: uploadedUrls,
@@ -127,30 +198,67 @@ export default function CreateScreen() {
         productTags,
       });
 
-      Alert.alert('Success', 'Your note has been published!', [
-        {
-          text: 'OK', onPress: () => {
-            setMedia([]);
-            setTitle('');
-            setDescription('');
-            setLocation('');
-            setProductTags([]);
-            router.push('/');
-          }
-        }
+      Alert.alert('Success', 'Your story has been published!', [
+        { text: 'OK', onPress: resetForm }
       ]);
     } catch (error: any) {
       console.error(error);
-      Alert.alert('Error', error.message || 'Failed to publish note');
+      Alert.alert('Error', error.message || 'Failed to publish story');
     } finally {
       setIsPublishing(false);
     }
   };
 
-  const productResults = useMemo(() => {
-    if (!productQuery.trim()) return MOCK_PRODUCTS.slice(0, 6);
-    return MOCK_PRODUCTS.filter(p => p.title.toLowerCase().includes(productQuery.toLowerCase())).slice(0, 8);
-  }, [productQuery]);
+  const publishProduct = async () => {
+      if (!prodImage) {
+          Alert.alert('Error', 'Please add a product image');
+          return;
+      }
+      if (!prodTitle.trim() || !prodPrice.trim()) {
+          Alert.alert('Error', 'Title and Price are required');
+          return;
+      }
+
+      setIsPublishing(true);
+      try {
+          const imageUrl = await uploadImage(user!.id, prodImage, `prod_${Date.now()}.jpg`);
+          
+          await createProduct(user!.id, {
+              title: prodTitle.trim(),
+              description: prodDesc.trim(),
+              price: parseFloat(prodPrice),
+              image: imageUrl,
+              brandName: prodBrand.trim(),
+              externalUrl: prodLink.trim() || undefined,
+          });
+
+          Alert.alert('Success', 'Product added successfully!', [
+              { text: 'OK', onPress: resetForm }
+          ]);
+      } catch (error: any) {
+          console.error(error);
+          Alert.alert('Error', error.message || 'Failed to add product');
+      } finally {
+          setIsPublishing(false);
+      }
+  };
+
+  const resetForm = () => {
+      setMedia([]);
+      setTitle('');
+      setDescription('');
+      setLocation('');
+      setProductTags([]);
+      
+      setProdImage(null);
+      setProdTitle('');
+      setProdPrice('');
+      setProdBrand('');
+      setProdLink('');
+      setProdDesc('');
+      
+      router.push('/');
+  };
 
   if (!user) {
     return (
@@ -168,7 +276,20 @@ export default function CreateScreen() {
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Create</Text>
+        <View style={styles.tabSwitch}>
+            <Pressable 
+                style={[styles.tabBtn, createMode === 'story' && styles.tabBtnActive]} 
+                onPress={() => setCreateMode('story')}
+            >
+                <Text style={[styles.tabBtnText, createMode === 'story' && styles.tabBtnTextActive]}>Story</Text>
+            </Pressable>
+            <Pressable 
+                style={[styles.tabBtn, createMode === 'product' && styles.tabBtnActive]} 
+                onPress={() => setCreateMode('product')}
+            >
+                <Text style={[styles.tabBtnText, createMode === 'product' && styles.tabBtnTextActive]}>Product</Text>
+            </Pressable>
+        </View>
         <Pressable
           onPress={handlePublish}
           disabled={isPublishing}
@@ -177,107 +298,189 @@ export default function CreateScreen() {
           {isPublishing ? (
             <ActivityIndicator size="small" color="#fff" />
           ) : (
-            <Text style={styles.publishText}>Publish</Text>
+            <Text style={styles.publishText}>{createMode === 'story' ? 'Publish' : 'Add'}</Text>
           )}
         </Pressable>
       </View>
 
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={{ flex: 1 }}
+      >
       <ScrollView style={styles.content} contentContainerStyle={{ paddingBottom: 80 }}>
-        <View style={styles.mediaRow} {...(draggingIndex !== null ? panResponder.panHandlers : {})}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.mediaContainer}>
-            {media.map((item, index) => (
-              <Pressable
-                key={item.uri + index}
-                style={[styles.imagePreview, draggingIndex === index && styles.dragging]}
-                onLongPress={() => setDraggingIndex(index)}
-              >
-                <Image source={{ uri: item.uri }} style={styles.image} resizeMode="cover" />
-                {item.type === 'video' && (
-                  <View style={styles.videoBadge}>
-                    <Play size={12} color="#fff" fill="#fff" />
-                  </View>
+        
+        {createMode === 'story' ? (
+            <>
+                <View style={styles.mediaRow} {...(draggingIndex !== null ? panResponder.panHandlers : {})}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.mediaContainer}>
+                    {media.map((item, index) => (
+                    <Pressable
+                        key={item.uri + index}
+                        style={[styles.imagePreview, draggingIndex === index && styles.dragging]}
+                        onLongPress={() => setDraggingIndex(index)}
+                    >
+                        <Image source={{ uri: item.uri }} style={styles.image} resizeMode="cover" />
+                        {item.type === 'video' && (
+                        <View style={styles.videoBadge}>
+                            <Play size={12} color="#fff" fill="#fff" />
+                        </View>
+                        )}
+                        <Pressable style={styles.removeButton} onPress={() => removeMedia(index)}>
+                        <X size={12} color="#fff" />
+                        </Pressable>
+                    </Pressable>
+                    ))}
+                    {media.length < 9 && (
+                    <Pressable style={styles.addMediaButton} onPress={pickMedia}>
+                        <View style={styles.addIconRow}>
+                        <Camera size={24} color="#555" />
+                        <Film size={24} color="#555" />
+                        </View>
+                        <Text style={styles.addMediaText}>Add Photos/Videos</Text>
+                    </Pressable>
+                    )}
+                </ScrollView>
+                {media.length > 0 && (
+                    <Pressable style={styles.editorButton} onPress={openEditor}>
+                    <SlidersHorizontal size={16} color="#111" />
+                    <Text style={styles.editorText}>Edit</Text>
+                    </Pressable>
                 )}
-                <Pressable style={styles.removeButton} onPress={() => removeMedia(index)}>
-                  <X size={12} color="#fff" />
+                </View>
+
+                <View style={styles.form}>
+                <TextInput
+                    style={styles.titleInput}
+                    placeholder="Title (Required)"
+                    placeholderTextColor="#aaa"
+                    value={title}
+                    onChangeText={setTitle}
+                    maxLength={80}
+                    autoCorrect={false}
+                />
+                <TextInput
+                    style={[styles.descInput, { height: Math.max(160, descHeight) }]}
+                    placeholder="Tell the story... #hashtags"
+                    placeholderTextColor="#999"
+                    value={description}
+                    onChangeText={setDescription}
+                    multiline
+                    onContentSizeChange={(e) => setDescHeight(e.nativeEvent.contentSize.height)}
+                    textAlignVertical="top"
+                />
+
+                <View style={styles.metaRow}>
+                    <View style={styles.metaLeft}>
+                    <MapPin size={18} color={Colors.light.text} />
+                    <Text style={styles.metaLabel}>Add Location</Text>
+                    </View>
+                    <Pressable onPress={() => { setLocationInput(location); setLocationModalVisible(true); }}>
+                    <Text style={styles.metaValue}>{location || 'Set location'}</Text>
+                    </Pressable>
+                </View>
+
+                <View style={styles.divider} />
+
+                <View style={styles.metaRow}>
+                    <View style={styles.metaLeft}>
+                    <Tag size={18} color={Colors.light.text} />
+                    <Text style={styles.metaLabel}>Tag Products</Text>
+                    </View>
+                    <Pressable onPress={() => setProductModalVisible(true)}>
+                    <Text style={styles.metaValue}>{productTags.length ? `${productTags.length} tagged` : 'Add products'}</Text>
+                    </Pressable>
+                </View>
+
+                {productTags.length > 0 && (
+                    <View style={styles.tagsRow}>
+                    {productTags.map(tag => (
+                        <View key={tag} style={styles.tagChip}>
+                        <Text style={styles.tagText}>{tag}</Text>
+                        <Pressable onPress={() => setProductTags(productTags.filter(t => t !== tag))}>
+                            <X size={12} color="#444" />
+                        </Pressable>
+                        </View>
+                    ))}
+                    </View>
+                )}
+                </View>
+            </>
+        ) : (
+            <View style={styles.form}>
+                <Pressable style={styles.productImagePicker} onPress={pickProductImage}>
+                    {prodImage ? (
+                        <Image source={{ uri: prodImage }} style={styles.prodImagePreview} />
+                    ) : (
+                        <View style={styles.prodImagePlaceholder}>
+                            <Camera size={32} color="#999" />
+                            <Text style={styles.prodImageText}>Add Product Photo</Text>
+                        </View>
+                    )}
                 </Pressable>
-              </Pressable>
-            ))}
-            {media.length < 9 && (
-              <Pressable style={styles.addMediaButton} onPress={pickMedia}>
-                <View style={styles.addIconRow}>
-                  <Camera size={24} color="#555" />
-                  <Film size={24} color="#555" />
+
+                <View style={styles.inputGroup}>
+                    <Text style={styles.label}>Product Title</Text>
+                    <TextInput 
+                        style={styles.input} 
+                        placeholder="e.g. Sony Headphones" 
+                        value={prodTitle} 
+                        onChangeText={setProdTitle} 
+                    />
                 </View>
-                <Text style={styles.addMediaText}>Add Photos/Videos</Text>
-              </Pressable>
-            )}
-          </ScrollView>
-          {media.length > 0 && (
-            <Pressable style={styles.editorButton} onPress={openEditor}>
-              <SlidersHorizontal size={16} color="#111" />
-              <Text style={styles.editorText}>Edit</Text>
-            </Pressable>
-          )}
-        </View>
 
-        <View style={styles.form}>
-          <TextInput
-            style={styles.titleInput}
-            placeholder="Title (Required)"
-            placeholderTextColor="#aaa"
-            value={title}
-            onChangeText={setTitle}
-            maxLength={80}
-            autoCorrect={false}
-          />
-          <TextInput
-            style={[styles.descInput, { height: Math.max(160, descHeight) }]}
-            placeholder="Tell the story... #hashtags"
-            placeholderTextColor="#999"
-            value={description}
-            onChangeText={setDescription}
-            multiline
-            onContentSizeChange={(e) => setDescHeight(e.nativeEvent.contentSize.height)}
-            textAlignVertical="top"
-          />
-
-          <View style={styles.metaRow}>
-            <View style={styles.metaLeft}>
-              <MapPin size={18} color={Colors.light.text} />
-              <Text style={styles.metaLabel}>Add Location</Text>
-            </View>
-            <Pressable onPress={() => { setLocationInput(location); setLocationModalVisible(true); }}>
-              <Text style={styles.metaValue}>{location || 'Set location'}</Text>
-            </Pressable>
-          </View>
-
-          <View style={styles.divider} />
-
-          <View style={styles.metaRow}>
-            <View style={styles.metaLeft}>
-              <Tag size={18} color={Colors.light.text} />
-              <Text style={styles.metaLabel}>Tag Products</Text>
-            </View>
-            <Pressable onPress={() => setProductModalVisible(true)}>
-              <Text style={styles.metaValue}>{productTags.length ? `${productTags.length} tagged` : 'Add products'}</Text>
-            </Pressable>
-          </View>
-
-          {productTags.length > 0 && (
-            <View style={styles.tagsRow}>
-              {productTags.map(tag => (
-                <View key={tag} style={styles.tagChip}>
-                  <Text style={styles.tagText}>{tag}</Text>
-                  <Pressable onPress={() => setProductTags(productTags.filter(t => t !== tag))}>
-                    <X size={12} color="#444" />
-                  </Pressable>
+                <View style={styles.rowInputs}>
+                    <View style={[styles.inputGroup, { flex: 1 }]}>
+                        <Text style={styles.label}>Price ($)</Text>
+                        <TextInput 
+                            style={styles.input} 
+                            placeholder="0.00" 
+                            value={prodPrice} 
+                            onChangeText={setProdPrice} 
+                            keyboardType="numeric"
+                        />
+                    </View>
+                    <View style={[styles.inputGroup, { flex: 1, marginLeft: 12 }]}>
+                        <Text style={styles.label}>Brand</Text>
+                        <TextInput 
+                            style={styles.input} 
+                            placeholder="e.g. Sony" 
+                            value={prodBrand} 
+                            onChangeText={setProdBrand} 
+                        />
+                    </View>
                 </View>
-              ))}
+
+                <View style={styles.inputGroup}>
+                    <Text style={styles.label}>Affiliate / Store Link</Text>
+                    <View style={styles.linkInputContainer}>
+                        <Link size={18} color="#999" />
+                        <TextInput 
+                            style={styles.linkInput} 
+                            placeholder="https://..." 
+                            value={prodLink} 
+                            onChangeText={setProdLink} 
+                            autoCapitalize="none"
+                        />
+                    </View>
+                </View>
+
+                <View style={styles.inputGroup}>
+                    <Text style={styles.label}>Description</Text>
+                    <TextInput 
+                        style={[styles.input, { height: 100 }]} 
+                        placeholder="Describe the product..." 
+                        value={prodDesc} 
+                        onChangeText={setProdDesc} 
+                        multiline 
+                        textAlignVertical="top"
+                    />
+                </View>
             </View>
-          )}
-        </View>
+        )}
       </ScrollView>
+      </KeyboardAvoidingView>
 
+      {/* MODALS REMAIN THE SAME */}
       <Modal visible={editorVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
@@ -362,24 +565,32 @@ export default function CreateScreen() {
               <Search size={16} color="#777" />
               <TextInput
                 style={styles.locationInput}
-                placeholder="Search products"
+                placeholder="Search for products to tag..."
                 value={productQuery}
                 onChangeText={setProductQuery}
               />
             </View>
-            <ScrollView style={{ maxHeight: 240 }}>
-              {productResults.map(p => (
-                <Pressable key={p.id} style={styles.productRow} onPress={() => {
-                  if (!productTags.includes(p.title)) setProductTags([...productTags, p.title]);
-                }}>
-                  <Image source={{ uri: p.image }} style={styles.productThumb} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.productTitle} numberOfLines={1}>{p.title}</Text>
-                    <Text style={styles.productMeta}>{p.brandName}</Text>
-                  </View>
-                  {productTags.includes(p.title) && <Check size={18} color={Colors.light.tint} />}
-                </Pressable>
-              ))}
+            <ScrollView style={{ maxHeight: 240, marginVertical: 10 }}>
+              {productResults.length === 0 ? (
+                <Text style={{ textAlign: 'center', color: '#999', marginVertical: 20 }}>No products found</Text>
+              ) : (
+                productResults.map(p => (
+                  <Pressable key={p.id} style={styles.productRow} onPress={() => {
+                    if (!productTags.includes(p.title)) setProductTags([...productTags, p.title]);
+                  }}>
+                    <Image source={{ uri: p.image }} style={styles.productThumb} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.productTitle} numberOfLines={1}>{p.title}</Text>
+                      <Text style={styles.productMeta}>{p.brandName}</Text>
+                    </View>
+                    {productTags.includes(p.title) ? (
+                      <Check size={18} color={Colors.light.tint} />
+                    ) : (
+                      <View style={{width:18, height:18, borderRadius:9, borderWidth:1, borderColor:'#ddd'}} />
+                    )}
+                  </Pressable>
+                ))
+              )}
             </ScrollView>
             <View style={styles.modalActions}>
               <Pressable onPress={() => setProductModalVisible(false)} style={styles.modalPrimaryBtn}>
@@ -440,6 +651,33 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '800',
     color: Colors.light.text,
+  },
+  tabSwitch: {
+      flexDirection: 'row',
+      backgroundColor: '#f5f5f5',
+      borderRadius: 20,
+      padding: 2,
+  },
+  tabBtn: {
+      paddingVertical: 6,
+      paddingHorizontal: 16,
+      borderRadius: 18,
+  },
+  tabBtnActive: {
+      backgroundColor: '#fff',
+      shadowColor: '#000',
+      shadowOffset: {width:0, height:1},
+      shadowOpacity: 0.1,
+      shadowRadius: 2,
+      elevation: 1,
+  },
+  tabBtnText: {
+      fontSize: 14,
+      color: '#666',
+      fontWeight: '600',
+  },
+  tabBtnTextActive: {
+      color: '#000',
   },
   publishButton: {
     backgroundColor: Colors.light.tint,
@@ -612,6 +850,74 @@ const styles = StyleSheet.create({
     color: '#111',
     fontWeight: '600',
   },
+  
+  // Product Form Styles
+  productImagePicker: {
+      width: 120,
+      height: 120,
+      borderRadius: 12,
+      backgroundColor: '#f5f5f5',
+      alignSelf: 'center',
+      marginBottom: 20,
+      borderWidth: 1,
+      borderColor: '#e5e7eb',
+      borderStyle: 'dashed',
+      justifyContent: 'center',
+      alignItems: 'center',
+      overflow: 'hidden',
+  },
+  prodImagePlaceholder: {
+      alignItems: 'center',
+      gap: 8,
+  },
+  prodImageText: {
+      fontSize: 12,
+      color: '#999',
+      fontWeight: '600',
+  },
+  prodImagePreview: {
+      width: '100%',
+      height: '100%',
+  },
+  inputGroup: {
+      gap: 6,
+      marginBottom: 16,
+  },
+  rowInputs: {
+      flexDirection: 'row',
+      marginBottom: 16,
+  },
+  label: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: '#333',
+  },
+  input: {
+      backgroundColor: '#f9fafb',
+      borderWidth: 1,
+      borderColor: '#e5e7eb',
+      borderRadius: 10,
+      padding: 12,
+      fontSize: 16,
+      color: '#111',
+  },
+  linkInputContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: '#f9fafb',
+      borderWidth: 1,
+      borderColor: '#e5e7eb',
+      borderRadius: 10,
+      paddingHorizontal: 12,
+      gap: 10,
+  },
+  linkInput: {
+      flex: 1,
+      paddingVertical: 12,
+      fontSize: 16,
+      color: 'blue',
+  },
+
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.35)',
@@ -653,10 +959,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#f7f7f9',
     borderRadius: 12,
     alignItems: 'center',
-  },
-  modalPlaceholder: {
-    color: '#555',
-    fontWeight: '600',
   },
   closeButton: {
     backgroundColor: '#111827',
@@ -727,11 +1029,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
     paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
   },
   productThumb: {
     width: 42,
     height: 42,
     borderRadius: 8,
+    backgroundColor: '#f0f0f0',
   },
   productTitle: {
     fontSize: 14,

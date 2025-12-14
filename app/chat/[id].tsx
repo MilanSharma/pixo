@@ -126,22 +126,9 @@ export default function ChatScreen() {
                 console.error('Error sending message:', error);
             }
         } else {
-            // Save to AsyncStorage for Persistence
+            // Save to AsyncStorage for Persistence (Mock)
             const storedKey = `mock_chat_${user.id}_${otherUserId}`;
             await AsyncStorage.setItem(storedKey, JSON.stringify(newMessages));
-            
-            // Auto Reply & Save
-            setTimeout(async () => {
-                const replyMsg: Message = {
-                    id: Date.now().toString() + '_reply',
-                    text: 'This is a persistent demo message! 👍',
-                    sender: 'them',
-                    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                };
-                const updatedWithReply = [...newMessages, replyMsg];
-                setMessages(updatedWithReply);
-                await AsyncStorage.setItem(storedKey, JSON.stringify(updatedWithReply));
-            }, 1000);
         }
     };
 
@@ -160,10 +147,13 @@ export default function ChatScreen() {
                     <ArrowLeft size={24} color={Colors.light.text} />
                 </Pressable>
                 {otherUser && (
-                    <>
+                    <Pressable 
+                        style={styles.userInfo} 
+                        onPress={() => router.push(`/user/${otherUser.id}`)}
+                    >
                         <Image source={{ uri: otherUser.avatar_url || 'https://ui-avatars.com/api/?name=' + otherUser.username }} style={styles.avatar} />
                         <Text style={styles.headerTitle}>{otherUser.username}</Text>
-                    </>
+                    </Pressable>
                 )}
             </View>
             <FlatList
@@ -189,6 +179,7 @@ const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: '#fff' },
     header: { flexDirection: 'row', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
     backButton: { marginRight: 16 },
+    userInfo: { flexDirection: 'row', alignItems: 'center', flex: 1 },
     avatar: { width: 32, height: 32, borderRadius: 16, marginRight: 10 },
     headerTitle: { fontSize: 16, fontWeight: 'bold', color: '#000' },
     loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },

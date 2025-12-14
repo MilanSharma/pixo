@@ -32,6 +32,7 @@ interface DBNote {
   collects_count: number;
   comments_count: number;
   created_at: string;
+  product_tags?: string[];
   profiles: {
     id: string;
     username: string;
@@ -57,6 +58,7 @@ function transformDBNote(dbNote: DBNote): Note {
     description: dbNote.content || '',
     media: dbNote.images,
     tags: [],
+    productTags: dbNote.product_tags || [],
     likes: dbNote.likes_count,
     collects: dbNote.collects_count,
     commentsCount: dbNote.comments_count,

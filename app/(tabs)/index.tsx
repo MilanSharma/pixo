@@ -16,7 +16,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const FEED_TABS = ['Following', 'Explore'];
 
-// Helper to check for real Database IDs vs Mock IDs
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 interface DBNote {
@@ -29,6 +28,7 @@ interface DBNote {
   collects_count: number;
   comments_count: number;
   created_at: string;
+  product_tags?: string[];
   profiles: {
     id: string;
     username: string;
@@ -54,7 +54,7 @@ function transformDBNote(dbNote: DBNote): Note {
     description: dbNote.content || '',
     media: dbNote.images,
     tags: [],
-    productTags: (dbNote as any).product_tags || [],
+    productTags: dbNote.product_tags || [],
     location: (dbNote as any).location || undefined,
     likes: dbNote.likes_count,
     collects: dbNote.collects_count,
@@ -136,12 +136,9 @@ export default function HomeScreen() {
       )
     );
 
-    // PERSISTENCE LOGIC
     if (UUID_REGEX.test(noteId)) {
-      // Real DB Update
       try { await likeNote(user.id, noteId); } catch (e) { console.error(e); }
     } else {
-      // Mock Local Update
       try {
           await AsyncStorage.setItem(`liked_mock_notes_${user.id}`, JSON.stringify(Array.from(newLikedNotes)));
       } catch (e) { console.error(e); }
@@ -169,7 +166,6 @@ export default function HomeScreen() {
       )
     );
 
-    // PERSISTENCE LOGIC
     if (UUID_REGEX.test(noteId)) {
       try { await collectNote(user.id, noteId); } catch (e) { console.error(e); }
     } else {

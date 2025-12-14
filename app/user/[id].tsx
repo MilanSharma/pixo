@@ -122,19 +122,35 @@ export default function UserProfileScreen() {
     Share.share({ message: `Check out ${userProfile?.username}'s profile on Pixo!` });
   };
 
+  const handleOptions = () => {
+    Alert.alert(
+      'User Options',
+      `Manage your interaction with @${userProfile?.username}`,
+      [
+        { 
+          text: 'Report User', 
+          onPress: () => Alert.alert('Reported', 'Thank you. We will review this profile.') 
+        },
+        { 
+          text: 'Block User', 
+          style: 'destructive', 
+          onPress: () => Alert.alert('Blocked', `You have blocked @${userProfile?.username}.`) 
+        },
+        { 
+          text: 'Cancel', 
+          style: 'cancel' 
+        }
+      ]
+    );
+  };
+
   const displayNotes = activeTab === 'Notes' ? notes : [];
 
   return (
     <View style={styles.container}>
-      {/* 
-        CRITICAL FIX: 
-        Render Stack.Screen immediately so the header is hidden 
-        BEFORE waiting for data to load. This prevents the black bar.
-      */}
       <Stack.Screen options={{ headerShown: false }} />
       <StatusBar style="dark" />
 
-      {/* Top Spacer for Status Bar */}
       <View style={{ height: insets.top, backgroundColor: '#fff' }} />
 
       {loading || !userProfile ? (
@@ -149,7 +165,7 @@ export default function UserProfileScreen() {
               <ArrowLeft size={24} color="#333" />
             </Pressable>
             <Text style={styles.navUsername}>{userProfile.username}</Text>
-            <Pressable onPress={() => Alert.alert('Options', 'Report or Block user')}>
+            <Pressable onPress={handleOptions} hitSlop={10}>
               <MoreHorizontal size={24} color="#333" />
             </Pressable>
           </View>
@@ -268,7 +284,7 @@ const styles = StyleSheet.create({
   followingText: { color: '#333' },
   messageBtn: { backgroundColor: '#eee', borderWidth: 1, borderColor: '#ddd' },
   messageText: { color: '#333', fontWeight: '600' },
-  iconBtn: { width: 36, backgroundColor: '#eee', borderWidth: 1, borderColor: '#ddd' },
+  iconBtn: { width: 36, backgroundColor: '#eee', borderWidth: 1, borderColor: '#ddd', alignItems: 'center', justifyContent: 'center' },
   tabs: { flexDirection: 'row', marginTop: 10, borderBottomWidth: 1, borderColor: '#eee' },
   tab: { flex: 1, alignItems: 'center', padding: 12 },
   activeTab: { borderBottomWidth: 2, borderColor: '#333' },
