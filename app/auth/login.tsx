@@ -44,7 +44,7 @@ export default function LoginScreen() {
   };
 
   const handleForgot = () => {
-    Alert.alert('Password Reset', 'Password reset is coming soon.');
+    router.push('/auth/forgot-password');
   };
 
   const socialButtons = [
@@ -73,7 +73,7 @@ export default function LoginScreen() {
 
           <View style={styles.socialRow}>
             {socialButtons.map((btn) => (
-              <TouchableOpacity key={btn.label} style={[styles.socialBtn, { backgroundColor: btn.color }]} onPress={() => Alert.alert(btn.label, 'Social login coming soon')}>
+              <TouchableOpacity key={btn.label} style={[styles.socialBtn, { backgroundColor: btn.color }]} onPress={() => Alert.alert('Social Login', 'Social login requires developer credentials. Configure them in your Supabase dashboard to enable this feature.')}>
                 <btn.icon size={18} color={btn.textColor} />
                 <Text style={[styles.socialText, { color: btn.textColor }]}>{btn.label}</Text>
               </TouchableOpacity>

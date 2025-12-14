@@ -39,7 +39,7 @@ export default function SettingsScreen() {
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <Stack.Screen options={{ headerShown: false }} />
-      
+
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} style={styles.backBtn}>
           <ArrowLeft size={24} color={Colors.light.text} />
@@ -50,17 +50,17 @@ export default function SettingsScreen() {
 
       <ScrollView style={styles.content}>
         <Text style={styles.sectionHeader}>Account</Text>
-        <SettingItem icon={Lock} label="Privacy & Security" onPress={() => Alert.alert('Coming Soon', 'This feature is under development.')} />
-        <SettingItem icon={Bell} label="Notifications" isSwitch value={true} onPress={() => Alert.alert('Coming Soon', 'This feature is under development.')} />
-        <SettingItem icon={Moon} label="Dark Mode" isSwitch value={false} onPress={() => Alert.alert('Coming Soon', 'This feature is under development.')} />
+        <SettingItem icon={Lock} label="Privacy & Security" onPress={() => router.push('/user/privacy')} />
+        <SettingItem icon={Bell} label="Notifications" onPress={() => router.push('/user/notifications')} />
+        <SettingItem icon={Moon} label="Dark Mode" isSwitch value={false} onPress={() => Alert.alert('Dark Mode', 'Dark mode will be available in a future update.')} />
 
         <Text style={styles.sectionHeader}>Support</Text>
-        <SettingItem icon={HelpCircle} label="Help Center" onPress={() => Alert.alert('Coming Soon', 'This feature is under development.')} />
-        <SettingItem icon={FileText} label="Terms of Service" onPress={() => Alert.alert('Coming Soon', 'This feature is under development.')} />
+        <SettingItem icon={HelpCircle} label="Help Center" onPress={() => router.push('/user/help')} />
+        <SettingItem icon={FileText} label="Terms of Service" onPress={() => router.push('/user/terms')} />
         <SettingItem icon={FileText} label="Privacy Policy" onPress={() => WebBrowser.openBrowserAsync('https://pixo.com/privacy')} />
 
         <View style={styles.spacer} />
-        
+
         <Pressable style={styles.logoutButton} onPress={handleSignOut}>
           <LogOut size={20} color={Colors.light.tint} />
           <Text style={styles.logoutText}>Sign Out</Text>

@@ -99,7 +99,7 @@ export default function CreateScreen() {
       Alert.alert('Error', 'Please add at least one photo or video');
       return;
     }
-    
+
     // Explicit trim and check
     const cleanTitle = title.trim();
     if (cleanTitle.length === 0) {
@@ -111,14 +111,14 @@ export default function CreateScreen() {
     try {
       const uploadFiles = media.map((item, index) => {
         const ext = item.uri.split('.').pop()?.toLowerCase() || (item.type === 'video' ? 'mp4' : 'jpg');
-        return { 
-          uri: item.uri, 
-          filename: `file_${index}.${ext}` 
+        return {
+          uri: item.uri,
+          filename: `file_${index}.${ext}`
         };
       });
-      
+
       const uploadedUrls = await uploadMultipleImages(user.id, uploadFiles);
-      
+
       await createNote(user.id, {
         title: cleanTitle,
         content: description.trim(),
@@ -126,16 +126,18 @@ export default function CreateScreen() {
         location: location.trim() || undefined,
         productTags,
       });
-      
+
       Alert.alert('Success', 'Your note has been published!', [
-        { text: 'OK', onPress: () => {
-          setMedia([]);
-          setTitle('');
-          setDescription('');
-          setLocation('');
-          setProductTags([]);
-          router.push('/');
-        }}
+        {
+          text: 'OK', onPress: () => {
+            setMedia([]);
+            setTitle('');
+            setDescription('');
+            setLocation('');
+            setProductTags([]);
+            router.push('/');
+          }
+        }
       ]);
     } catch (error: any) {
       console.error(error);
@@ -167,8 +169,8 @@ export default function CreateScreen() {
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Create</Text>
-        <Pressable 
-          onPress={handlePublish} 
+        <Pressable
+          onPress={handlePublish}
           disabled={isPublishing}
           style={[styles.publishButton, isPublishing && styles.disabledButton]}
         >
@@ -287,10 +289,41 @@ export default function CreateScreen() {
               ))}
             </View>
             <View style={styles.modalBody}>
-              <Text style={styles.modalPlaceholder}>{editorTab} coming soon</Text>
+              {editorTab === 'Crop' && (
+                <View style={styles.editorContent}>
+                  <Image source={{ uri: media[0]?.uri }} style={styles.previewImage} resizeMode="contain" />
+                  <Text style={styles.editorLabel}>Aspect Ratio</Text>
+                  <View style={styles.aspectButtons}>
+                    <Pressable style={styles.aspectBtn}><Text style={styles.aspectText}>1:1</Text></Pressable>
+                    <Pressable style={styles.aspectBtn}><Text style={styles.aspectText}>4:3</Text></Pressable>
+                    <Pressable style={styles.aspectBtn}><Text style={styles.aspectText}>16:9</Text></Pressable>
+                    <Pressable style={styles.aspectBtn}><Text style={styles.aspectText}>Free</Text></Pressable>
+                  </View>
+                </View>
+              )}
+              {editorTab === 'Filter' && (
+                <View style={styles.editorContent}>
+                  <Image source={{ uri: media[0]?.uri }} style={styles.previewImage} resizeMode="contain" />
+                  <Text style={styles.editorLabel}>Filters</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
+                    {['Normal', 'Vivid', 'B&W', 'Warm', 'Cool', 'Fade', 'Drama'].map(filter => (
+                      <Pressable key={filter} style={styles.filterBtn}>
+                        <View style={styles.filterPreview} />
+                        <Text style={styles.filterName}>{filter}</Text>
+                      </Pressable>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
+              {editorTab === 'Tags' && (
+                <View style={styles.editorContent}>
+                  <Text style={styles.editorLabel}>Tag people or products in your media</Text>
+                  <Text style={styles.editorHint}>Use the "Tag Products" option in the main form to add product tags to your post.</Text>
+                </View>
+              )}
             </View>
             <Pressable style={styles.closeButton} onPress={() => setEditorVisible(false)}>
-              <Text style={styles.closeText}>Close</Text>
+              <Text style={styles.closeText}>Done</Text>
             </Pressable>
           </View>
         </View>
@@ -708,5 +741,64 @@ const styles = StyleSheet.create({
   productMeta: {
     fontSize: 12,
     color: '#666',
+  },
+  editorContent: {
+    width: '100%',
+    alignItems: 'center',
+    gap: 16,
+  },
+  previewImage: {
+    width: '100%',
+    height: 180,
+    borderRadius: 12,
+    backgroundColor: '#f0f0f0',
+  },
+  editorLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#333',
+    alignSelf: 'flex-start',
+  },
+  editorHint: {
+    fontSize: 14,
+    color: '#888',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  aspectButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  aspectBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: '#f3f4f6',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  aspectText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#444',
+  },
+  filterRow: {
+    gap: 12,
+    paddingHorizontal: 4,
+  },
+  filterBtn: {
+    alignItems: 'center',
+    gap: 6,
+  },
+  filterPreview: {
+    width: 60,
+    height: 60,
+    borderRadius: 10,
+    backgroundColor: '#e5e7eb',
+  },
+  filterName: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#555',
   },
 });

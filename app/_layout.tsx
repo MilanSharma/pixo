@@ -19,11 +19,20 @@ function RootLayoutNav() {
       <Stack.Screen name="auth" options={{ headerShown: false }} />
       <Stack.Screen name="note/[id]" options={{ presentation: 'card', headerShown: false }} />
       <Stack.Screen name="product/[id]" options={{ presentation: 'card', headerShown: false }} />
-            <Stack.Screen name="search/index" options={{ presentation: 'modal', headerShown: false }} />
+      <Stack.Screen name="search/index" options={{ presentation: 'modal', headerShown: false }} />
       <Stack.Screen name="user/menu" options={{ presentation: 'modal', headerShown: false }} />
       <Stack.Screen name="user/settings" options={{ headerShown: false }} />
       <Stack.Screen name="user/edit" options={{ headerShown: false }} />
       <Stack.Screen name="user/[id]" options={{ headerShown: false }} />
+      <Stack.Screen name="user/privacy" options={{ headerShown: false }} />
+      <Stack.Screen name="user/notifications" options={{ headerShown: false }} />
+      <Stack.Screen name="user/help" options={{ headerShown: false }} />
+      <Stack.Screen name="user/terms" options={{ headerShown: false }} />
+      <Stack.Screen name="user/qrcode" options={{ headerShown: false }} />
+      <Stack.Screen name="user/insights" options={{ headerShown: false }} />
+      <Stack.Screen name="user/wallet" options={{ headerShown: false }} />
+      <Stack.Screen name="user/favorites" options={{ headerShown: false }} />
+      <Stack.Screen name="user/orders" options={{ headerShown: false }} />
       <Stack.Screen name="+not-found" options={{ title: 'Oops!' }} />
     </Stack>
   );
