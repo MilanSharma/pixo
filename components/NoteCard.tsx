@@ -1,30 +1,19 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { View, Text, StyleSheet, Pressable, Image } from 'react-native';
-import { Heart, Trash2 } from 'lucide-react-native';
+import { Heart, Trash2, X } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { Colors } from '@/constants/colors';
 import { Note } from '@/types';
 
 interface NoteCardProps {
   note: Note;
-  onLongPress?: (note: Note) => void;
-  onDelete?: (note: Note) => void;
+  onPress?: () => void;
+  onRemove?: (note: Note) => void;
+  removeType?: 'delete' | 'remove'; // 'delete' = Trash icon, 'remove' = X icon
 }
 
-export const NoteCard = ({ note, onLongPress, onDelete }: NoteCardProps) => {
+export const NoteCard = ({ note, onPress, onRemove, removeType }: NoteCardProps) => {
   const router = useRouter();
-  const [aspectRatio, setAspectRatio] = useState(3 / 4);
-
-  useEffect(() => {
-    if (!note.media || note.media.length === 0) return;
-    
-    const uri = note.media[0];
-    if (!uri) return;
-
-    Image.getSize(uri, (width, height) => {
-      if (width && height) setAspectRatio(width / height);
-    }, () => {});
-  }, [note.media]);
 
   const handlePress = () => {
     router.push(`/note/${note.id}`);
@@ -34,39 +23,48 @@ export const NoteCard = ({ note, onLongPress, onDelete }: NoteCardProps) => {
     <Pressable 
       style={styles.container} 
       onPress={handlePress}
-      onLongPress={() => onLongPress && onLongPress(note)}
       delayLongPress={500}
     >
-      <Image
-        source={{ uri: note.media && note.media.length > 0 ? note.media[0] : 'https://via.placeholder.com/150' }}
-        style={[styles.image, { aspectRatio }]}
-        resizeMode="cover"
-      />
+      <View style={styles.imageContainer}>
+          <Image
+            source={{ uri: note.media && note.media.length > 0 ? note.media[0] : 'https://via.placeholder.com/150' }}
+            style={styles.image}
+            resizeMode="cover"
+          />
+          {/* COMMON REMOVE BUTTON (Top Right Overlay) */}
+          {onRemove && (
+              <Pressable 
+                style={styles.removeBtn} 
+                onPress={() => onRemove(note)}
+                hitSlop={10}
+              >
+                  {removeType === 'delete' ? (
+                      <Trash2 size={14} color="#fff" />
+                  ) : (
+                      <X size={14} color="#fff" />
+                  )}
+              </Pressable>
+          )}
+      </View>
+
       <View style={styles.content}>
         <Text style={styles.title} numberOfLines={2}>
-          {note.title}
+          {note.title || 'Untitled'}
         </Text>
         <View style={styles.footer}>
           <View style={styles.userContainer}>
             <Image
-              source={{ uri: note.user.avatar }}
+              source={{ uri: note.user?.avatar || 'https://ui-avatars.com/api/?name=User' }}
               style={styles.avatar}
             />
             <Text style={styles.username} numberOfLines={1}>
-              {note.user.username}
+              {note.user?.username || 'user'}
             </Text>
           </View>
           
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-            {onDelete && (
-              <Pressable onPress={() => onDelete(note)} hitSlop={10}>
-                <Trash2 size={16} color={Colors.light.tint} />
-              </Pressable>
-            )}
-            <View style={styles.likesContainer}>
-              <Heart size={14} color={Colors.light.icon} />
-              <Text style={styles.likes}>{note.likes}</Text>
-            </View>
+          <View style={styles.likesContainer}>
+             <Heart size={14} color={Colors.light.icon} />
+             <Text style={styles.likes}>{note.likes}</Text>
           </View>
         </View>
       </View>
@@ -86,25 +84,47 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
     elevation: 2,
     flex: 1,
+    height: 280, // Fixed height for consistency
+  },
+  imageContainer: {
+    height: 200, // Fixed image height
+    width: '100%',
+    position: 'relative',
   },
   image: {
     width: '100%',
+    height: '100%',
     backgroundColor: '#eee',
+  },
+  removeBtn: {
+      position: 'absolute',
+      top: 8,
+      right: 8,
+      backgroundColor: 'rgba(0,0,0,0.6)',
+      borderRadius: 12,
+      width: 24,
+      height: 24,
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 10,
   },
   content: {
     padding: 10,
-    gap: 8,
+    flex: 1,
+    justifyContent: 'space-between',
   },
   title: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
     color: Colors.light.text,
-    lineHeight: 18,
+    lineHeight: 16,
+    marginBottom: 4,
   },
   footer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    height: 24, // Fixed footer height to prevent retraction
   },
   userContainer: {
     flexDirection: 'row',
@@ -114,12 +134,12 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   avatar: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
   },
   username: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#666',
     flex: 1,
   },
@@ -129,7 +149,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   likes: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#666',
   },
 });

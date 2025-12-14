@@ -19,7 +19,11 @@ function RootLayoutNav() {
       <Stack.Screen name="auth" options={{ headerShown: false }} />
       <Stack.Screen name="note/[id]" options={{ presentation: 'card', headerShown: false }} />
       <Stack.Screen name="product/[id]" options={{ presentation: 'card', headerShown: false }} />
-      <Stack.Screen name="search/index" options={{ presentation: 'modal', headerShown: false }} />
+            <Stack.Screen name="search/index" options={{ presentation: 'modal', headerShown: false }} />
+      <Stack.Screen name="user/menu" options={{ presentation: 'modal', headerShown: false }} />
+      <Stack.Screen name="user/settings" options={{ headerShown: false }} />
+      <Stack.Screen name="user/edit" options={{ headerShown: false }} />
+      <Stack.Screen name="user/[id]" options={{ headerShown: false }} />
       <Stack.Screen name="+not-found" options={{ title: 'Oops!' }} />
     </Stack>
   );

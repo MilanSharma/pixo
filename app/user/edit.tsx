@@ -21,7 +21,7 @@ export default function EditProfileScreen() {
 
   const pickImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: 'images',
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.5,
@@ -40,7 +40,7 @@ export default function EditProfileScreen() {
       let avatarUrl = avatar;
       // If the avatar is a local file (changed), upload it
       if (avatar && !avatar.startsWith('http')) {
-        avatarUrl = await uploadImage(user.id, avatar, 'avatar.jpg');
+        avatarUrl = await uploadImage(user.id, avatar, `avatar_${Date.now()}.jpg`);
       }
 
       const { error } = await supabase

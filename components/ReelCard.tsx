@@ -30,13 +30,14 @@ export const ReelCard = ({
     isCollected = false,
 }: ReelCardProps) => {
     const router = useRouter();
-    
+
     // UI States
     const [isMuted, setIsMuted] = useState(false);
     const [showControlIcon, setShowControlIcon] = useState<'play' | 'pause' | null>(null);
-    
+
     // Animation values
     const controlIconOpacity = useRef(new Animated.Value(0)).current;
+    const muteOpacity = useRef(new Animated.Value(0)).current;
     const likeButtonScale = useRef(new Animated.Value(1)).current;
 
     // 1. Detect if the media is a video
@@ -67,6 +68,15 @@ export const ReelCard = ({
         const newMutedState = !isMuted;
         setIsMuted(newMutedState);
         player.muted = newMutedState;
+
+        // Flash the icon
+        muteOpacity.setValue(1);
+        Animated.timing(muteOpacity, {
+            toValue: 0,
+            duration: 500,
+            delay: 1500,
+            useNativeDriver: true
+        }).start();
     };
 
     // 5. Handle Play/Pause Tap
@@ -159,21 +169,21 @@ export const ReelCard = ({
 
                 {/* Mute Button (Bottom Right of Video Area) */}
                 {isVideo && (
-                    <Pressable 
-                        style={styles.muteButton} 
+                    <Pressable
+                        style={styles.muteButton}
                         onPress={(e) => {
-                            e.stopPropagation(); // Prevent triggering play/pause
+                            e.stopPropagation();
                             toggleMute();
                         }}
                         hitSlop={20}
                     >
-                        <View style={styles.muteIconWrapper}>
+                        <Animated.View style={[styles.muteIconWrapper, { opacity: muteOpacity }]}>
                             {isMuted ? (
                                 <VolumeX size={20} color="#fff" />
                             ) : (
                                 <Volume2 size={20} color="#fff" />
                             )}
-                        </View>
+                        </Animated.View>
                     </Pressable>
                 )}
             </Pressable>
@@ -181,7 +191,12 @@ export const ReelCard = ({
             {/* Right Side Actions */}
             <View style={styles.actionsContainer}>
                 <Pressable onPress={handleUserPress} style={styles.actionButton}>
-                    <Image source={{ uri: note.user.avatar }} style={styles.userAvatar} />
+                    <Image
+                        key={note.user.avatar || 'avatar'}
+                        source={{ uri: note.user.avatar || 'https://ui-avatars.com/api/?name=User' }}
+                        style={styles.userAvatar}
+                        cachePolicy="none"
+                    />
                 </Pressable>
 
                 <Pressable onPress={handleLikePress} style={styles.actionButton}>
@@ -206,15 +221,18 @@ export const ReelCard = ({
                     <Text style={styles.actionText}>Share</Text>
                 </Pressable>
 
-                <Pressable style={styles.actionButton}>
-                    <MoreVertical size={28} color="#fff" strokeWidth={2} />
-                </Pressable>
+
             </View>
 
             {/* Bottom Info */}
             <View style={styles.infoContainer}>
                 <Pressable onPress={handleUserPress} style={styles.userInfo}>
-                    <Image source={{ uri: note.user.avatar }} style={styles.bottomAvatar} />
+                    <Image
+                        key={`bottom-${note.user.avatar || 'avatar'}`}
+                        source={{ uri: note.user.avatar || 'https://ui-avatars.com/api/?name=User' }}
+                        style={styles.bottomAvatar}
+                        cachePolicy="none"
+                    />
                     <Text style={styles.username}>@{note.user.username}</Text>
                 </Pressable>
                 <Text style={styles.title} numberOfLines={2}>{note.title}</Text>
@@ -230,12 +248,13 @@ const styles = StyleSheet.create({
     image: { width: '100%', height: '100%', backgroundColor: '#1a1a1a' },
     centerIconContainer: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center', zIndex: 50 },
     bottomGradient: { position: 'absolute', left: 0, right: 0, bottom: 0, height: '50%' },
-    
+
     // Mute Button Styles
     muteButton: {
         position: 'absolute',
-        bottom: 140, // Above bottom gradient/info
-        right: 16, // Left of action buttons
+        alignSelf: 'center',
+        top: '50%',
+        marginTop: 40, // Positioned just below the center play/pause icon
         zIndex: 60,
     },
     muteIconWrapper: {
@@ -247,12 +266,12 @@ const styles = StyleSheet.create({
     actionsContainer: { position: 'absolute', right: 12, bottom: 120, gap: 20, alignItems: 'center', zIndex: 50 },
     actionButton: { alignItems: 'center', gap: 4 },
     userAvatar: { width: 48, height: 48, borderRadius: 24, borderWidth: 2, borderColor: '#fff', marginBottom: 10 },
-    actionText: { color: '#fff', fontSize: 12, fontWeight: '600', textShadowColor: 'rgba(0,0,0,0.75)', textShadowOffset: {width:0,height:1}, textShadowRadius:3 },
-    
+    actionText: { color: '#fff', fontSize: 12, fontWeight: '600', textShadowColor: 'rgba(0,0,0,0.75)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 },
+
     infoContainer: { position: 'absolute', left: 12, right: 80, bottom: 120, gap: 8, zIndex: 50 },
     userInfo: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
     bottomAvatar: { width: 32, height: 32, borderRadius: 16, borderWidth: 1.5, borderColor: '#fff' },
-    username: { color: '#fff', fontSize: 15, fontWeight: '700', textShadowColor: 'rgba(0,0,0,0.75)', textShadowOffset: {width:0,height:1}, textShadowRadius:3 },
-    title: { color: '#fff', fontSize: 16, fontWeight: '700', lineHeight: 20, textShadowColor: 'rgba(0,0,0,0.75)', textShadowOffset: {width:0,height:1}, textShadowRadius:3 },
-    description: { color: '#fff', fontSize: 14, lineHeight: 18, textShadowColor: 'rgba(0,0,0,0.75)', textShadowOffset: {width:0,height:1}, textShadowRadius:3 },
+    username: { color: '#fff', fontSize: 15, fontWeight: '700', textShadowColor: 'rgba(0,0,0,0.75)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 },
+    title: { color: '#fff', fontSize: 16, fontWeight: '700', lineHeight: 20, textShadowColor: 'rgba(0,0,0,0.75)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 },
+    description: { color: '#fff', fontSize: 14, lineHeight: 18, textShadowColor: 'rgba(0,0,0,0.75)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 },
 });

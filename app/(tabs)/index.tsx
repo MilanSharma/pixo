@@ -14,7 +14,7 @@ import { useIsFocused } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-const FEED_TABS = ['Following', 'For You'];
+const FEED_TABS = ['Following', 'Explore'];
 
 // Helper to check for real Database IDs vs Mock IDs
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -68,7 +68,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const isFocused = useIsFocused();
-  const [feedTab, setFeedTab] = useState('For You');
+  const [feedTab, setFeedTab] = useState('Explore');
   const [notes, setNotes] = useState<Note[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -97,7 +97,7 @@ export default function HomeScreen() {
   const loadNotes = async () => {
     try {
       setLoading(true);
-      if (feedTab === 'For You') {
+      if (feedTab === 'Explore') {
         const data = await getNotes(60, 0);
         if (data && data.length > 0) {
           setNotes(data.map((n: DBNote) => transformDBNote(n)));

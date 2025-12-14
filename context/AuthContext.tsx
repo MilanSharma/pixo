@@ -33,10 +33,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Use a ref to always have access to the latest user value
+  const userRef = React.useRef<User | null>(null);
+  
+  // Keep the ref in sync with user state
+  React.useEffect(() => {
+    userRef.current = user;
+  }, [user]);
+
   const refreshProfile = async () => {
-    if (user) {
+    // Use the ref to get the current user value, avoiding stale closure issues
+    const currentUser = userRef.current;
+    if (currentUser) {
       try {
-        const profileData = await getProfile(user.id);
+        const profileData = await getProfile(currentUser.id);
         setProfile(profileData);
       } catch (error) {
         console.error('Error fetching profile:', error);

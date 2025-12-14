@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, Pressable, Dimensions } from 'react-native';
+import { Alert, View, Text, StyleSheet, Pressable, Dimensions } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { Colors } from '@/constants/colors';
 import { X, QrCode, Wallet, Activity, Star, CreditCard } from 'lucide-react-native';
@@ -12,7 +12,7 @@ export default function MenuScreen() {
   const { profile } = useAuth();
 
   const MenuItem = ({ icon: Icon, label, color = '#333' }: any) => (
-    <Pressable style={styles.menuItem} onPress={() => {}}>
+    <Pressable style={styles.menuItem} onPress={() => Alert.alert('Coming Soon', 'Feature coming in next update!')}>
       <Icon size={24} color={color} />
       <Text style={[styles.menuLabel, { color }]}>{label}</Text>
     </Pressable>

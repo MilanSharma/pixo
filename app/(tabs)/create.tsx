@@ -56,7 +56,7 @@ export default function CreateScreen() {
 
   const pickMedia = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.All,
+      mediaTypes: 'all',
       allowsMultipleSelection: true,
       selectionLimit: 9 - media.length,
       quality: 1,

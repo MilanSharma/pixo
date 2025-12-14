@@ -1,3 +1,4 @@
+import { getProfile } from '@/lib/auth';
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable, ActivityIndicator, Share, Alert } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
@@ -8,7 +9,7 @@ import { MasonryList } from '@/components/MasonryList';
 import { MOCK_USERS, MOCK_NOTES } from '@/mocks/data';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/context/AuthContext';
-import { followUser, getFollowStatus, getProfile, getUserNotes } from '@/lib/database';
+import { followUser, getFollowStatus, getUserNotes } from '@/lib/database';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar } from 'expo-status-bar';
 
@@ -20,7 +21,7 @@ export default function UserProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user: currentUser } = useAuth();
-  
+
   const [userProfile, setUserProfile] = useState<any>(null);
   const [notes, setNotes] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState('Notes');
@@ -41,29 +42,29 @@ export default function UserProfileScreen() {
         // --- REAL USER ---
         const profile = await getProfile(userId);
         setUserProfile({
-           id: profile.id,
-           username: profile.username,
-           avatar: profile.avatar_url,
-           bio: profile.bio,
-           followers: profile.followers_count || 0,
-           following: profile.following_count || 0,
+          id: profile.id,
+          username: profile.username,
+          avatar: profile.avatar_url,
+          bio: profile.bio,
+          followers: profile.followers_count || 0,
+          following: profile.following_count || 0,
         });
 
         const userNotes = await getUserNotes(userId);
         const mappedNotes = userNotes?.map((n: any) => ({
-            id: n.id,
-            userId: n.user_id,
-            user: { username: profile.username, avatar: profile.avatar_url },
-            title: n.title,
-            media: n.images || [],
-            likes: n.likes_count,
-            collects: n.collects_count,
+          id: n.id,
+          userId: n.user_id,
+          user: { username: profile.username, avatar: profile.avatar_url },
+          title: n.title,
+          media: n.images || [],
+          likes: n.likes_count,
+          collects: n.collects_count,
         })) || [];
         setNotes(mappedNotes);
 
         if (currentUser) {
-            const status = await getFollowStatus(currentUser.id, userId);
-            setIsFollowing(status);
+          const status = await getFollowStatus(currentUser.id, userId);
+          setIsFollowing(status);
         }
 
       } else {
@@ -72,10 +73,10 @@ export default function UserProfileScreen() {
         setUserProfile(u);
         const userNotes = MOCK_NOTES.filter(n => n.userId === userId);
         setNotes(userNotes);
-        
+
         if (currentUser) {
-            const stored = await AsyncStorage.getItem(`followed_mock_${userId}`);
-            setIsFollowing(stored === 'true');
+          const stored = await AsyncStorage.getItem(`followed_mock_${userId}`);
+          setIsFollowing(stored === 'true');
         }
       }
     } catch (e) {
@@ -90,29 +91,29 @@ export default function UserProfileScreen() {
       Alert.alert('Sign In', 'Please sign in to follow users.');
       return;
     }
-    
+
     const newState = !isFollowing;
     setIsFollowing(newState);
     setFollowLoading(true);
 
     try {
-        if (UUID_REGEX.test(userId)) {
-            await followUser(currentUser.id, userId);
-        } else {
-            await AsyncStorage.setItem(`followed_mock_${userId}`, newState ? 'true' : 'false');
-        }
+      if (UUID_REGEX.test(userId)) {
+        await followUser(currentUser.id, userId);
+      } else {
+        await AsyncStorage.setItem(`followed_mock_${userId}`, newState ? 'true' : 'false');
+      }
     } catch (error) {
-        setIsFollowing(!newState);
-        console.error(error);
+      setIsFollowing(!newState);
+      console.error(error);
     } finally {
-        setFollowLoading(false);
+      setFollowLoading(false);
     }
   };
 
   const handleMessage = () => {
     if (!currentUser) {
-        Alert.alert('Sign In', 'Please sign in to send messages.');
-        return;
+      Alert.alert('Sign In', 'Please sign in to send messages.');
+      return;
     }
     router.push(`/chat/${userId}`);
   };
@@ -121,7 +122,7 @@ export default function UserProfileScreen() {
     Share.share({ message: `Check out ${userProfile?.username}'s profile on Pixo!` });
   };
 
-  const displayNotes = activeTab === 'Notes' ? notes : []; 
+  const displayNotes = activeTab === 'Notes' ? notes : [];
 
   return (
     <View style={styles.container}>
@@ -132,24 +133,24 @@ export default function UserProfileScreen() {
       */}
       <Stack.Screen options={{ headerShown: false }} />
       <StatusBar style="dark" />
-      
+
       {/* Top Spacer for Status Bar */}
       <View style={{ height: insets.top, backgroundColor: '#fff' }} />
 
       {loading || !userProfile ? (
         <View style={[styles.contentContainer, styles.center]}>
-            <ActivityIndicator size="large" color={Colors.light.tint} />
+          <ActivityIndicator size="large" color={Colors.light.tint} />
         </View>
       ) : (
         <>
           {/* Navbar */}
           <View style={styles.navBar}>
             <Pressable onPress={() => router.canGoBack() ? router.back() : router.replace('/')} hitSlop={10} style={styles.backBtn}>
-                <ArrowLeft size={24} color="#333" />
+              <ArrowLeft size={24} color="#333" />
             </Pressable>
             <Text style={styles.navUsername}>{userProfile.username}</Text>
             <Pressable onPress={() => Alert.alert('Options', 'Report or Block user')}>
-                <MoreHorizontal size={24} color="#333" />
+              <MoreHorizontal size={24} color="#333" />
             </Pressable>
           </View>
 
@@ -158,63 +159,65 @@ export default function UserProfileScreen() {
             ListHeaderComponent={
               <>
                 <View style={styles.profileHeader}>
-                    <Image 
-                        source={{ uri: userProfile.avatar || 'https://ui-avatars.com/api/?name=User' }} 
-                        style={styles.avatar} 
-                    />
-                    <View style={styles.statsContainer}>
-                        <View style={styles.statItem}>
-                            <Text style={styles.statNum}>{userProfile.followers}</Text>
-                            <Text style={styles.statLabel}>Followers</Text>
-                        </View>
-                        <View style={styles.statItem}>
-                            <Text style={styles.statNum}>{userProfile.following}</Text>
-                            <Text style={styles.statLabel}>Following</Text>
-                        </View>
+                  <Image
+                    key={userProfile.avatar || 'default-avatar'}
+                    source={{ uri: userProfile.avatar || 'https://ui-avatars.com/api/?name=User' }}
+                    style={styles.avatar}
+                    cachePolicy="none"
+                  />
+                  <View style={styles.statsContainer}>
+                    <View style={styles.statItem}>
+                      <Text style={styles.statNum}>{userProfile.followers}</Text>
+                      <Text style={styles.statLabel}>Followers</Text>
                     </View>
+                    <View style={styles.statItem}>
+                      <Text style={styles.statNum}>{userProfile.following}</Text>
+                      <Text style={styles.statLabel}>Following</Text>
+                    </View>
+                  </View>
                 </View>
 
                 <View style={styles.bioSection}>
-                    <Text style={styles.username}>{userProfile.username}</Text>
-                    {userProfile.bio && <Text style={styles.bio}>{userProfile.bio}</Text>}
+                  <Text style={styles.username}>{userProfile.username}</Text>
+                  {userProfile.bio && <Text style={styles.bio}>{userProfile.bio}</Text>}
                 </View>
 
                 <View style={styles.actions}>
-                    <Pressable 
-                        style={[
-                            styles.btn, 
-                            isFollowing ? styles.followingBtn : styles.followBtn,
-                            { flex: 1 }
-                        ]} 
-                        onPress={handleFollow}
-                        disabled={followLoading}
-                    >
-                        <Text style={[
-                            styles.btnText, 
-                            isFollowing ? styles.followingText : styles.followText
-                        ]}>
-                            {isFollowing ? 'Following' : 'Follow'}
-                        </Text>
-                    </Pressable>
-                    
-                    <Pressable 
-                        style={[styles.btn, styles.messageBtn, { flex: 1 }]} 
-                        onPress={handleMessage}
-                    >
-                        <Text style={styles.messageText}>Message</Text>
-                    </Pressable>
+                  <Pressable
+                    style={[
+                      styles.btn,
+                      isFollowing ? styles.followingBtn : styles.followBtn,
+                      { flex: 1 }
+                    ]}
+                    onPress={handleFollow}
+                    disabled={followLoading}
+                  >
+                    <Text style={[
+                      styles.btnText,
+                      isFollowing ? styles.followingText : styles.followText
+                    ]}>
+                      {isFollowing ? 'Following' : 'Follow'}
+                    </Text>
+                  </Pressable>
 
-                    <Pressable style={[styles.btn, styles.iconBtn]} onPress={handleShare}>
-                        <Share2 size={20} color="#333" />
-                    </Pressable>
+                  <Pressable
+                    style={[styles.btn, styles.messageBtn, { flex: 1 }]}
+                    onPress={handleMessage}
+                  >
+                    <Text style={styles.messageText}>Message</Text>
+                  </Pressable>
+
+                  <Pressable style={[styles.btn, styles.iconBtn]} onPress={handleShare}>
+                    <Share2 size={20} color="#333" />
+                  </Pressable>
                 </View>
 
                 <View style={styles.tabs}>
-                    {['Notes', 'Collects'].map(t => (
-                        <Pressable key={t} onPress={() => setActiveTab(t)} style={[styles.tab, activeTab === t && styles.activeTab]}>
-                            <Text style={{color: activeTab === t ? '#333' : '#999', fontWeight:'bold'}}>{t}</Text>
-                        </Pressable>
-                    ))}
+                  {['Notes', 'Collects'].map(t => (
+                    <Pressable key={t} onPress={() => setActiveTab(t)} style={[styles.tab, activeTab === t && styles.activeTab]}>
+                      <Text style={{ color: activeTab === t ? '#333' : '#999', fontWeight: 'bold' }}>{t}</Text>
+                    </Pressable>
+                  ))}
                 </View>
               </>
             }
@@ -226,20 +229,20 @@ export default function UserProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { 
-    flex: 1, 
-    backgroundColor: '#fff', 
+  container: {
+    flex: 1,
+    backgroundColor: '#fff',
   },
   contentContainer: {
     flex: 1,
-    backgroundColor: '#fff', 
+    backgroundColor: '#fff',
   },
   center: { justifyContent: 'center', alignItems: 'center' },
-  navBar: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    paddingHorizontal: 16, 
-    height: 48, 
+  navBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    height: 48,
     alignItems: 'center',
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',

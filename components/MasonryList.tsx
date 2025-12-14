@@ -9,8 +9,8 @@ interface MasonryListProps {
   onRefresh?: () => void;
   refreshing?: boolean;
   ListHeaderComponent?: React.ReactNode;
-  onLongPressItem?: (note: Note) => void;
-  onDeleteItem?: (note: Note) => void;
+  onRemoveItem?: (note: Note) => void;
+  removeType?: 'delete' | 'remove';
 }
 
 export const MasonryList = ({ 
@@ -18,8 +18,10 @@ export const MasonryList = ({
   onRefresh, 
   refreshing, 
   ListHeaderComponent, 
-  onLongPressItem,
-  onDeleteItem 
+  
+  
+  onRemoveItem,
+  removeType
 }: MasonryListProps) => {
   const insets = useSafeAreaInsets();
   
@@ -59,8 +61,8 @@ export const MasonryList = ({
             <NoteCard 
               key={item.id} 
               note={item} 
-              onLongPress={onLongPressItem} 
-              onDelete={onDeleteItem}
+              onRemove={onRemoveItem}
+              removeType={removeType}
             />
           ))}
         </View>
@@ -69,8 +71,8 @@ export const MasonryList = ({
             <NoteCard 
               key={item.id} 
               note={item} 
-              onLongPress={onLongPressItem} 
-              onDelete={onDeleteItem}
+              onRemove={onRemoveItem}
+              removeType={removeType}
             />
           ))}
         </View>

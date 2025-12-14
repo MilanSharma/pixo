@@ -6,7 +6,7 @@ import { Colors } from '@/constants/colors';
 import { MasonryList } from '@/components/MasonryList';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/context/AuthContext';
-import { getUserNotes, getUserCollections, getUserLikes, deleteNote } from '@/lib/database';
+import { getUserNotes, getUserCollections, getUserLikes, deleteNote, collectNote, likeNote } from '@/lib/database';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Note } from '@/types';
 import { MOCK_NOTES } from '@/mocks/data'; // Import Mock Data
@@ -34,13 +34,13 @@ function transformDBNote(dbNote: any): Note {
 export default function MeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { user, profile, loading: authLoading } = useAuth();
+  const { user, profile, loading: authLoading, refreshProfile } = useAuth();
   const [activeTab, setActiveTab] = useState('Notes');
-  
+
   const [notes, setNotes] = useState<Note[]>([]);
   const [collectedNotes, setCollectedNotes] = useState<Note[]>([]);
   const [likedNotes, setLikedNotes] = useState<Note[]>([]);
-  
+
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [mockFollowingCount, setMockFollowingCount] = useState(0);
 
@@ -48,6 +48,7 @@ export default function MeScreen() {
   useFocusEffect(
     React.useCallback(() => {
       if (user) {
+        refreshProfile(); // <--- Added this to force profile refresh
         loadUserData(false);
         countMockFollows();
       }
@@ -55,21 +56,21 @@ export default function MeScreen() {
   );
 
   const countMockFollows = async () => {
-      if (!user) return;
-      const keys = await AsyncStorage.getAllKeys();
-      const followKeys = keys.filter(k => k.startsWith('followed_mock_'));
-      let count = 0;
-      for (const k of followKeys) {
-          const val = await AsyncStorage.getItem(k);
-          if (val === 'true') count++;
-      }
-      setMockFollowingCount(count);
+    if (!user) return;
+    const keys = await AsyncStorage.getAllKeys();
+    const followKeys = keys.filter(k => k.startsWith('followed_mock_'));
+    let count = 0;
+    for (const k of followKeys) {
+      const val = await AsyncStorage.getItem(k);
+      if (val === 'true') count++;
+    }
+    setMockFollowingCount(count);
   };
 
   const loadUserData = async (showSpinner = false) => {
     if (!user) return;
     if (showSpinner) setIsRefreshing(true);
-    
+
     try {
       // 1. Load Real Data
       const [userNotes, userCollections, userLikes] = await Promise.all([
@@ -77,7 +78,7 @@ export default function MeScreen() {
         getUserCollections(user.id),
         getUserLikes(user.id),
       ]);
-      
+
       const realNotes = userNotes?.map(transformDBNote) || [];
       const realCollections = userCollections?.map(transformDBNote) || [];
       const realLikes = userLikes?.map(transformDBNote) || [];
@@ -85,7 +86,7 @@ export default function MeScreen() {
       // 2. Load Mock Data from Storage
       const likedMockIdsStr = await AsyncStorage.getItem(`liked_mock_notes_${user.id}`);
       const collectedMockIdsStr = await AsyncStorage.getItem(`collected_mock_notes_${user.id}`);
-      
+
       const likedMockIds = likedMockIdsStr ? JSON.parse(likedMockIdsStr) : [];
       const collectedMockIds = collectedMockIdsStr ? JSON.parse(collectedMockIdsStr) : [];
 
@@ -104,28 +105,55 @@ export default function MeScreen() {
     }
   };
 
-  const handleDeleteNote = (targetNote: Note) => {
-    if (activeTab !== 'Notes') return;
-    Alert.alert(
-      "Delete Note",
-      "Are you sure you want to delete this note?",
-      [
-        { text: "Cancel", style: "cancel" },
-        { 
-          text: "Delete", 
-          style: "destructive", 
-          onPress: async () => {
-            try {
-              setNotes(prev => prev.filter(n => n.id !== targetNote.id));
-              await deleteNote(targetNote.id);
-            } catch (error) {
-              Alert.alert("Error", "Could not delete note");
-              loadUserData(false);
-            }
+
+
+
+
+
+
+  const handleRemoveItem = (targetNote: Note) => {
+    let title = "Remove Item";
+    let message = "Are you sure?";
+    let action = async () => { };
+
+    if (activeTab === 'Notes') {
+      title = "Delete Note";
+      message = "Permanently delete this note?";
+      action = async () => {
+        setNotes(prev => prev.filter(n => n.id !== targetNote.id));
+        await deleteNote(targetNote.id);
+      };
+    } else if (activeTab === 'Collects') {
+      title = "Remove from Collection";
+      message = "Remove this note from your collection?";
+      action = async () => {
+        setCollectedNotes(prev => prev.filter(n => n.id !== targetNote.id));
+        await collectNote(user?.id || '', targetNote.id); // Toggles off
+      };
+    } else if (activeTab === 'Likes') {
+      title = "Unlike Note";
+      message = "Remove this note from your likes?";
+      action = async () => {
+        setLikedNotes(prev => prev.filter(n => n.id !== targetNote.id));
+        await likeNote(user?.id || '', targetNote.id); // Toggles off
+      };
+    }
+
+    Alert.alert(title, message, [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Confirm",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await action();
+          } catch (error) {
+            Alert.alert("Error", "Action failed.");
+            loadUserData(false); // Revert on error
           }
         }
-      ]
-    );
+      }
+    ]);
   };
 
   const renderHeader = () => (
@@ -133,26 +161,31 @@ export default function MeScreen() {
       <View style={styles.topBar}>
         <Pressable onPress={() => router.push('/user/menu')} style={styles.iconBtn}><Menu size={24} color={Colors.light.text} /></Pressable>
         <View style={styles.topBarRight}>
-          <Pressable onPress={() => {}} style={styles.iconBtn}><Share2 size={24} color={Colors.light.text} /></Pressable>
+          <Pressable onPress={() => { }} style={styles.iconBtn}><Share2 size={24} color={Colors.light.text} /></Pressable>
           <Pressable onPress={() => router.push('/user/settings')} style={styles.iconBtn}><Settings size={24} color={Colors.light.text} /></Pressable>
         </View>
       </View>
 
       <View style={styles.profileInfo}>
-        <Image source={{ uri: profile?.avatar_url || 'https://ui-avatars.com/api/?name=User' }} style={styles.avatar} />
+        <Image
+          key={profile?.avatar_url || 'default-avatar'}
+          source={{ uri: profile?.avatar_url || 'https://ui-avatars.com/api/?name=User' }}
+          style={styles.avatar}
+          cachePolicy="none"
+        />
         <View style={styles.statsContainer}>
-           <View style={styles.statItem}>
-             <Text style={styles.statNumber}>{ (profile?.following_count || 0) + mockFollowingCount }</Text>
-             <Text style={styles.statLabel}>Following</Text>
-           </View>
-           <View style={styles.statItem}>
-             <Text style={styles.statNumber}>{profile?.followers_count || 0}</Text>
-             <Text style={styles.statLabel}>Followers</Text>
-           </View>
-           <View style={styles.statItem}>
-             <Text style={styles.statNumber}>{profile?.likes_count || 0}</Text>
-             <Text style={styles.statLabel}>Likes</Text>
-           </View>
+          <View style={styles.statItem}>
+            <Text style={styles.statNumber}>{(profile?.following_count || 0) + mockFollowingCount}</Text>
+            <Text style={styles.statLabel}>Following</Text>
+          </View>
+          <View style={styles.statItem}>
+            <Text style={styles.statNumber}>{profile?.followers_count || 0}</Text>
+            <Text style={styles.statLabel}>Followers</Text>
+          </View>
+          <View style={styles.statItem}>
+            <Text style={styles.statNumber}>{profile?.likes_count || 0}</Text>
+            <Text style={styles.statLabel}>Likes</Text>
+          </View>
         </View>
       </View>
 
@@ -166,7 +199,7 @@ export default function MeScreen() {
         <Pressable style={styles.editButton} onPress={() => router.push('/user/edit')}>
           <Text style={styles.editButtonText}>Edit Profile</Text>
         </Pressable>
-        <Pressable style={styles.editButton} onPress={() => {}}>
+        <Pressable style={styles.editButton} onPress={() => { }}>
           <Text style={styles.editButtonText}>Share Profile</Text>
         </Pressable>
       </View>
@@ -185,21 +218,23 @@ export default function MeScreen() {
   const displayNotes = activeTab === 'Notes' ? notes : activeTab === 'Collects' ? collectedNotes : likedNotes;
 
   if (!user || !profile) {
-      return (
-        <View style={[styles.container, styles.center]}>
-            <ActivityIndicator size="large" color={Colors.light.tint} />
-        </View>
-      );
+    return (
+      <View style={[styles.container, styles.center]}>
+        <ActivityIndicator size="large" color={Colors.light.tint} />
+      </View>
+    );
   }
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <MasonryList
-          data={displayNotes}
-          ListHeaderComponent={renderHeader()}
-          refreshing={isRefreshing}
-          onRefresh={() => loadUserData(true)}
-          onDeleteItem={activeTab === 'Notes' ? handleDeleteNote : undefined}
+        data={displayNotes}
+        ListHeaderComponent={renderHeader()}
+        refreshing={isRefreshing}
+        onRefresh={() => loadUserData(true)}
+        onRemoveItem={handleRemoveItem}
+
+        removeType={activeTab === 'Notes' ? 'delete' : 'remove'}
       />
     </View>
   );

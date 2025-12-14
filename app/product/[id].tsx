@@ -40,18 +40,14 @@ export default function ProductDetailScreen() {
     const handleAddToCart = () => {
         if (product) {
             addToCart(product);
-            Alert.alert('Added to Cart', `${product.title} has been added to your cart.`);
+            Alert.alert('Added', 'Item added to cart', [{ text: 'Keep Shopping' }, { text: 'Checkout', onPress: () => router.push('/checkout') }]);
         }
     };
 
     const handleBuyNow = () => {
         if (product) {
             addToCart(product);
-            Alert.alert(
-                'Proceeding to Checkout', 
-                `Buying ${product.title} now...`,
-                [{ text: 'OK', onPress: () => router.push('/(tabs)/shop') }]
-            );
+            router.push('/checkout');
         }
     };
 

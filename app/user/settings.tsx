@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView, Alert, Switch } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
 import { Colors } from '@/constants/colors';
 import { useAuth } from '@/context/AuthContext';
 import { signOut } from '@/lib/auth';
@@ -49,14 +50,14 @@ export default function SettingsScreen() {
 
       <ScrollView style={styles.content}>
         <Text style={styles.sectionHeader}>Account</Text>
-        <SettingItem icon={Lock} label="Privacy & Security" onPress={() => {}} />
-        <SettingItem icon={Bell} label="Notifications" isSwitch value={true} onPress={() => {}} />
-        <SettingItem icon={Moon} label="Dark Mode" isSwitch value={false} onPress={() => {}} />
+        <SettingItem icon={Lock} label="Privacy & Security" onPress={() => Alert.alert('Coming Soon', 'This feature is under development.')} />
+        <SettingItem icon={Bell} label="Notifications" isSwitch value={true} onPress={() => Alert.alert('Coming Soon', 'This feature is under development.')} />
+        <SettingItem icon={Moon} label="Dark Mode" isSwitch value={false} onPress={() => Alert.alert('Coming Soon', 'This feature is under development.')} />
 
         <Text style={styles.sectionHeader}>Support</Text>
-        <SettingItem icon={HelpCircle} label="Help Center" onPress={() => {}} />
-        <SettingItem icon={FileText} label="Terms of Service" onPress={() => {}} />
-        <SettingItem icon={FileText} label="Privacy Policy" onPress={() => {}} />
+        <SettingItem icon={HelpCircle} label="Help Center" onPress={() => Alert.alert('Coming Soon', 'This feature is under development.')} />
+        <SettingItem icon={FileText} label="Terms of Service" onPress={() => Alert.alert('Coming Soon', 'This feature is under development.')} />
+        <SettingItem icon={FileText} label="Privacy Policy" onPress={() => WebBrowser.openBrowserAsync('https://pixo.com/privacy')} />
 
         <View style={styles.spacer} />
         
