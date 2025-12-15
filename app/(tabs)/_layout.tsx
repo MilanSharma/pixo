@@ -2,10 +2,13 @@ import { Tabs } from 'expo-router';
 import { Home, ShoppingBag, PlusSquare, MessageCircle, User } from 'lucide-react-native';
 import React from 'react';
 import { Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Colors } from '@/constants/colors';
 
 export default function TabLayout() {
+  const insets = useSafeAreaInsets();
+
   return (
     <Tabs
       screenOptions={{
@@ -15,13 +18,16 @@ export default function TabLayout() {
         tabBarStyle: {
           backgroundColor: Colors.light.card,
           borderTopColor: Colors.light.border,
-          height: Platform.OS === 'ios' ? 88 : 60,
-          paddingBottom: Platform.OS === 'ios' ? 28 : 8,
+          // Dynamically calculate height: Base height (60) + System Navigation Bar Height
+          height: 60 + insets.bottom,
+          // Dynamically add padding: Push icons up by the amount of the System Navigation Bar
+          paddingBottom: insets.bottom + (Platform.OS === 'ios' ? 0 : 8), 
           paddingTop: 8,
         },
         tabBarLabelStyle: {
           fontSize: 10,
           fontWeight: '500',
+          marginBottom: Platform.OS === 'android' ? 4 : 0, // Add slight margin for text on Android
         },
       }}
     >
