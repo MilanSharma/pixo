@@ -106,34 +106,42 @@ export default function CreateScreen() {
   }), [draggingIndex, media]);
 
   const pickMedia = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: 'all',
-      allowsMultipleSelection: true,
-      selectionLimit: 9 - media.length,
-      quality: 1,
-      videoMaxDuration: 60, 
-    });
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images', 'videos', 'livePhotos'], // Fixed: Use array of strings
+        allowsMultipleSelection: true,
+        selectionLimit: 9 - media.length,
+        quality: 1,
+        videoMaxDuration: 60, 
+      });
 
-    if (!result.canceled) {
-      const newItems: MediaItem[] = result.assets.map(a => ({
-        uri: a.uri,
-        type: a.type === 'video' ? 'video' : 'image',
-        duration: a.duration
-      }));
-      setMedia(prev => [...prev, ...newItems].slice(0, 9));
+      if (!result.canceled) {
+        const newItems: MediaItem[] = result.assets.map(a => ({
+          uri: a.uri,
+          type: a.type === 'video' ? 'video' : 'image',
+          duration: a.duration
+        }));
+        setMedia(prev => [...prev, ...newItems].slice(0, 9));
+      }
+    } catch (e: any) {
+      Alert.alert('Error picking media', e.message);
     }
   };
 
   const pickProductImage = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: 'images',
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.8,
-    });
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images', 'livePhotos'], // Fixed: Use array of strings
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
 
-    if (!result.canceled) {
-      setProdImage(result.assets[0].uri);
+      if (!result.canceled) {
+        setProdImage(result.assets[0].uri);
+      }
+    } catch (e: any) {
+      Alert.alert('Error picking image', e.message);
     }
   };
 
@@ -257,7 +265,12 @@ export default function CreateScreen() {
       setProdLink('');
       setProdDesc('');
       
-      router.push('/');
+      // Navigate to home or shop based on what was created
+      if (createMode === 'story') {
+          router.replace('/(tabs)/');
+      } else {
+          router.replace('/(tabs)/shop');
+      }
   };
 
   if (!user) {
@@ -480,7 +493,7 @@ export default function CreateScreen() {
       </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* MODALS REMAIN THE SAME */}
+      {/* MODALS */}
       <Modal visible={editorVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>

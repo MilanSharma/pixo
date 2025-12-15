@@ -1,5 +1,5 @@
-import { useRouter } from 'expo-router';
-import React, { useState, useEffect, useRef } from 'react';
+import { useRouter, useFocusEffect } from 'expo-router';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, TextInput, Pressable, Alert, ActivityIndicator, Animated } from 'react-native';
 import { Search, Heart, X } from 'lucide-react-native';
 import { Colors } from '@/constants/colors';
@@ -19,10 +19,8 @@ export default function ShopScreen() {
   const [loading, setLoading] = useState(true);
   const { count } = useCart();
   
-  // Animation value for the heart icon
   const scaleAnim = useRef(new Animated.Value(1)).current;
 
-  // Trigger animation when count increases
   useEffect(() => {
     if (count > 0) {
       Animated.sequence([
@@ -40,17 +38,21 @@ export default function ShopScreen() {
     }
   }, [count]);
 
-  useEffect(() => {
-    loadProducts();
-  }, []);
+  // Use focus effect to reload data when navigating back to this tab
+  useFocusEffect(
+    useCallback(() => {
+        loadProducts();
+    }, [])
+  );
 
   const loadProducts = async () => {
     try {
-      setLoading(true);
+      // Don't show full loading spinner on re-focus if we already have data
+      if (products.length === 0) setLoading(true);
+      
       const data = await getProducts();
       
       if (data && data.length > 0) {
-        // Map DB columns to Product type
         const mappedProducts: Product[] = data.map((p: any) => ({
           id: p.id,
           brandId: p.brand_id || 'unknown',
@@ -70,8 +72,10 @@ export default function ShopScreen() {
       }
     } catch (error) {
       console.error('Failed to load products:', error);
-      setProducts(MOCK_PRODUCTS);
-      setFilteredProducts(MOCK_PRODUCTS);
+      if (products.length === 0) {
+          setProducts(MOCK_PRODUCTS);
+          setFilteredProducts(MOCK_PRODUCTS);
+      }
     } finally {
       setLoading(false);
     }

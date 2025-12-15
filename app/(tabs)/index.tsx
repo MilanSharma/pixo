@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, Pressable, ActivityIndicator, FlatList, Dimensions, Alert } from 'react-native';
 import { Search } from 'lucide-react-native';
 import { Colors } from '@/constants/colors';
@@ -6,7 +6,7 @@ import { ReelCard } from '@/components/ReelCard';
 import { getNotes, likeNote, collectNote } from '@/lib/database';
 import { MOCK_NOTES } from '@/mocks/data';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Note } from '@/types';
 import { useAuth } from '@/context/AuthContext';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -76,10 +76,13 @@ export default function HomeScreen() {
   const [likedNotes, setLikedNotes] = useState<Set<string>>(new Set());
   const [collectedNotes, setCollectedNotes] = useState<Set<string>>(new Set());
 
-  useEffect(() => {
-    loadNotes();
-    loadLocalInteractions();
-  }, [feedTab]);
+  // Use focus effect to reload data whenever the screen is focused (e.g. after posting)
+  useFocusEffect(
+    useCallback(() => {
+      loadNotes();
+      loadLocalInteractions();
+    }, [feedTab])
+  );
 
   const loadLocalInteractions = async () => {
       if (!user) return;
@@ -96,7 +99,9 @@ export default function HomeScreen() {
 
   const loadNotes = async () => {
     try {
-      setLoading(true);
+      // Only show full spinner if we have no data yet to avoid flickering on refresh
+      if (notes.length === 0) setLoading(true);
+      
       if (feedTab === 'Explore') {
         const data = await getNotes(60, 0);
         if (data && data.length > 0) {
@@ -109,7 +114,8 @@ export default function HomeScreen() {
         setNotes(followedNotes);
       }
     } catch (error) {
-      setNotes(MOCK_NOTES);
+      console.error("Failed to load notes", error);
+      if (notes.length === 0) setNotes(MOCK_NOTES);
     } finally {
       setLoading(false);
     }

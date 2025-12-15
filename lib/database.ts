@@ -65,7 +65,8 @@ export async function createNote(userId: string, note: {
   return data;
 }
 
-// === NEW: Create Product ===
+// === PRODUCTS ===
+
 export async function createProduct(userId: string, product: {
   title: string;
   description?: string;
@@ -92,6 +93,44 @@ export async function createProduct(userId: string, product: {
   if (error) throw error;
   return data;
 }
+
+export async function getUserProducts(userId: string) {
+  const { data, error } = await supabase
+    .from('products')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteProduct(productId: string) {
+  const { error } = await supabase
+    .from('products')
+    .delete()
+    .eq('id', productId);
+
+  if (error) throw error;
+  return true;
+}
+
+export async function getProductByTitle(title: string) {
+  const { data, error } = await supabase
+    .from('products')
+    .select('id')
+    .ilike('title', title) 
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+      console.error(error);
+      return null;
+  }
+  return data;
+}
+
+// === END PRODUCTS ===
 
 export async function likeNote(userId: string, noteId: string) {
   const { error: likeError } = await supabase

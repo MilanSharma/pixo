@@ -6,24 +6,36 @@ import { Colors } from '@/constants/colors';
 import { MasonryList } from '@/components/MasonryList';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/context/AuthContext';
-import { getUserNotes, getUserCollections, getUserLikes, deleteNote, collectNote, likeNote } from '@/lib/database';
+import { getUserNotes, getUserCollections, getUserLikes, deleteNote, collectNote, likeNote, getUserProducts, deleteProduct } from '@/lib/database';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Note } from '@/types';
 import { MOCK_NOTES } from '@/mocks/data'; 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const TABS = ['Notes', 'Collects', 'Likes'];
+const TABS = ['Notes', 'Products', 'Collects', 'Likes'];
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function transformDBNote(dbNote: any): Note {
   const profile = dbNote.profiles || { id: dbNote.user_id, username: 'Unknown', avatar_url: '' };
+  
+  let mediaItems = [];
+  if (Array.isArray(dbNote.images)) {
+      mediaItems = dbNote.images;
+  } else if (typeof dbNote.images === 'string') {
+      if (dbNote.images.startsWith('{') || dbNote.images.startsWith('[')) {
+          try { mediaItems = JSON.parse(dbNote.images); } catch(e) { mediaItems = [dbNote.images]; }
+      } else {
+          mediaItems = [dbNote.images];
+      }
+  }
+
   return {
     id: dbNote.id,
     userId: dbNote.user_id,
     user: { id: profile.id, username: profile.username || 'Unknown', avatar: profile.avatar_url || 'https://ui-avatars.com/api/?name=User' },
     title: dbNote.title,
     description: dbNote.content || '',
-    media: dbNote.images || [],
+    media: mediaItems,
     tags: [],
     likes: dbNote.likes_count || 0,
     collects: dbNote.collects_count || 0,
@@ -32,13 +44,30 @@ function transformDBNote(dbNote: any): Note {
   };
 }
 
+function transformProductToNote(product: any, user: any): Note {
+    return {
+        id: product.id,
+        userId: product.user_id,
+        user: { id: user.id, username: user.username, avatar: user.avatar_url },
+        title: product.title,
+        description: product.description,
+        media: [product.image],
+        tags: [],
+        likes: 0,
+        collects: 0,
+        commentsCount: 0,
+        createdAt: product.created_at,
+    };
+}
+
 export default function MeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { user, profile, loading: authLoading, refreshProfile } = useAuth();
+  const { user, profile, refreshProfile } = useAuth();
   const [activeTab, setActiveTab] = useState('Notes');
 
   const [notes, setNotes] = useState<Note[]>([]);
+  const [products, setProducts] = useState<Note[]>([]);
   const [collectedNotes, setCollectedNotes] = useState<Note[]>([]);
   const [likedNotes, setLikedNotes] = useState<Note[]>([]);
 
@@ -72,13 +101,15 @@ export default function MeScreen() {
     if (showSpinner) setIsRefreshing(true);
 
     try {
-      const [userNotes, userCollections, userLikes] = await Promise.all([
+      const [userNotes, userProducts, userCollections, userLikes] = await Promise.all([
         getUserNotes(user.id),
+        getUserProducts(user.id),
         getUserCollections(user.id),
         getUserLikes(user.id),
       ]);
 
       const realNotes = userNotes?.map(transformDBNote) || [];
+      const realProducts = userProducts?.map(p => transformProductToNote(p, profile || user)) || [];
       const realCollections = userCollections?.map(transformDBNote) || [];
       const realLikes = userLikes?.map(transformDBNote) || [];
 
@@ -93,6 +124,7 @@ export default function MeScreen() {
       const mockCollectedNotes = MOCK_NOTES.filter(n => collectedMockIds.includes(n.id));
 
       setNotes(realNotes);
+      setProducts(realProducts);
       setCollectedNotes([...realCollections, ...mockCollectedNotes]);
       setLikedNotes([...realLikes, ...mockLikedNotes]);
 
@@ -117,6 +149,15 @@ export default function MeScreen() {
     }
   };
 
+  // CORRECT ROUTING
+  const handleItemPress = (item: Note) => {
+      if (activeTab === 'Products') {
+          router.push(`/product/${item.id}`);
+      } else {
+          router.push(`/note/${item.id}`);
+      }
+  };
+
   const handleRemoveItem = (targetNote: Note) => {
     if (!targetNote || !targetNote.id) return; 
 
@@ -131,6 +172,15 @@ export default function MeScreen() {
         setNotes(prev => prev.filter(n => n.id !== targetNote.id));
         if (UUID_REGEX.test(targetNote.id)) {
             await deleteNote(targetNote.id);
+        }
+      };
+    } else if (activeTab === 'Products') {
+      title = "Delete Product";
+      message = "Permanently delete this product listing?";
+      action = async () => {
+        setProducts(prev => prev.filter(n => n.id !== targetNote.id));
+        if (UUID_REGEX.test(targetNote.id)) {
+            await deleteProduct(targetNote.id);
         }
       };
     } else if (activeTab === 'Collects') {
@@ -188,7 +238,6 @@ export default function MeScreen() {
   };
 
   const renderHeader = () => {
-    // Generate avatar URI properly
     const avatarUri = profile?.avatar_url 
       ? profile.avatar_url 
       : `https://ui-avatars.com/api/?name=${profile?.username || 'User'}&background=random`;
@@ -253,7 +302,17 @@ export default function MeScreen() {
     );
   };
 
-  const displayNotes = activeTab === 'Notes' ? notes : activeTab === 'Collects' ? collectedNotes : likedNotes;
+  const getDisplayData = () => {
+      switch(activeTab) {
+          case 'Notes': return notes;
+          case 'Products': return products;
+          case 'Collects': return collectedNotes;
+          case 'Likes': return likedNotes;
+          default: return notes;
+      }
+  };
+
+  const displayData = getDisplayData();
 
   if (!user || !profile) {
     return (
@@ -266,12 +325,13 @@ export default function MeScreen() {
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <MasonryList
-        data={displayNotes}
+        data={displayData}
         ListHeaderComponent={renderHeader()}
         refreshing={isRefreshing}
         onRefresh={() => loadUserData(true)}
         onRemoveItem={handleRemoveItem}
-        removeType={activeTab === 'Notes' ? 'delete' : 'remove'}
+        onPressItem={handleItemPress}
+        removeType={(activeTab === 'Notes' || activeTab === 'Products') ? 'delete' : 'remove'}
       />
     </View>
   );
@@ -297,9 +357,9 @@ const styles = StyleSheet.create({
   actionButtons: { flexDirection: 'row', paddingHorizontal: 20, gap: 10, marginTop: 16, marginBottom: 20 },
   editButton: { flex: 1, paddingVertical: 8, borderWidth: 1, borderColor: '#ddd', borderRadius: 20, alignItems: 'center' },
   editButtonText: { fontSize: 14, fontWeight: '600', color: Colors.light.text },
-  tabsRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#eee', gap: 40 },
-  tabItem: { alignItems: 'center', position: 'relative', paddingVertical: 12 },
-  tabText: { fontSize: 16, color: '#999', fontWeight: '600' },
+  tabsRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#eee', gap: 20 },
+  tabItem: { alignItems: 'center', position: 'relative', paddingVertical: 12, paddingHorizontal: 4 },
+  tabText: { fontSize: 15, color: '#999', fontWeight: '600' },
   activeTabText: { color: Colors.light.text, fontWeight: 'bold' },
   activeIndicator: { position: 'absolute', bottom: 0, width: 30, height: 2, backgroundColor: Colors.light.tint },
 });

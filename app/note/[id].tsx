@@ -10,6 +10,7 @@ import { useAuth } from '@/context/AuthContext';
 import { getNoteById, getComments, addComment, likeNote, collectNote, checkUserInteractions, followUser, deleteNote, getFollowStatus } from '@/lib/database';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Image } from 'expo-image';
+import { useVideoPlayer, VideoView } from 'expo-video';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -25,12 +26,43 @@ interface DBComment {
   };
 }
 
+// Helper component to handle individual media slides (Image vs Video)
+const MediaSlide = ({ uri }: { uri: string }) => {
+  const isVideo = uri && (uri.toLowerCase().endsWith('.mp4') || uri.toLowerCase().endsWith('.mov') || uri.toLowerCase().endsWith('.webm'));
+
+  if (isVideo) {
+    const player = useVideoPlayer(uri, player => {
+      player.loop = true;
+      player.play(); // Auto play reels in detail view
+    });
+
+    return (
+      <View style={styles.carouselImage}>
+        <VideoView 
+          style={{ width: '100%', height: '100%' }} 
+          player={player} 
+          contentFit="cover"
+          nativeControls 
+        />
+      </View>
+    );
+  }
+
+  return (
+    <Image
+      source={{ uri }}
+      style={styles.carouselImage}
+      contentFit="cover"
+    />
+  );
+};
+
 export default function NoteDetailScreen() {
   const { id } = useLocalSearchParams();
   const noteId = Array.isArray(id) ? id[0] : id;
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { user, profile } = useAuth(); // Destructure profile here
+  const { user, profile } = useAuth();
   
   const [note, setNote] = useState<Note | null>(null);
   const [loading, setLoading] = useState(true);
@@ -167,7 +199,6 @@ export default function NoteDetailScreen() {
       if (isRealId) {
           await followUser(user.id, note.userId);
       } else {
-          // Local Persistence
           await AsyncStorage.setItem(`followed_mock_${note.userId}`, newState ? 'true' : 'false');
       }
     } catch (error) {
@@ -208,7 +239,6 @@ export default function NoteDetailScreen() {
 
     try {
         if (isRealId) {
-            // Real DB
             const newComment = await addComment(user.id, note.id, text);
             if (newComment) {
                 setComments(prev => [{
@@ -225,8 +255,6 @@ export default function NoteDetailScreen() {
                 }, ...prev]);
             }
         } else {
-            // Mock Comment
-            // Use profile data if available, fallback to defaults
             const username = profile?.username || 'user';
             const avatar = profile?.avatar_url || `https://ui-avatars.com/api/?name=${username}`;
 
@@ -269,7 +297,6 @@ export default function NoteDetailScreen() {
         if (isRealId) {
             await likeNote(user.id, note.id);
         } else {
-            // Local Mock Like
             const likedStr = await AsyncStorage.getItem(`liked_mock_notes_${user.id}`);
             let likedArr = likedStr ? JSON.parse(likedStr) : [];
             if (newState) {
@@ -301,7 +328,6 @@ export default function NoteDetailScreen() {
         if (isRealId) {
             await collectNote(user.id, note.id);
         } else {
-            // Local Mock Collect
             const colStr = await AsyncStorage.getItem(`collected_mock_notes_${user.id}`);
             let colArr = colStr ? JSON.parse(colStr) : [];
             if (newState) {
@@ -332,7 +358,6 @@ export default function NoteDetailScreen() {
               if (UUID_REGEX.test(note.id)) {
                   await deleteNote(note.id);
               }
-              // For mock notes, we just navigate back since we can't delete them from the mock file dynamically
               router.replace('/(tabs)/me');
             } catch (error: any) {
               Alert.alert("Error", "Failed to delete note");
@@ -417,12 +442,7 @@ export default function NoteDetailScreen() {
               scrollEventThrottle={16}
             >
               {note.media.map((uri, index) => (
-                <Image
-                  key={index}
-                  source={{ uri }}
-                  style={styles.carouselImage}
-                  contentFit="cover"
-                />
+                <MediaSlide key={index} uri={uri} />
               ))}
             </ScrollView>
             
@@ -458,14 +478,17 @@ export default function NoteDetailScreen() {
                   </View>
               </Pressable>
               
-              <Pressable 
-                style={[styles.followButton, isFollowing && styles.followingButton]} 
-                onPress={handleFollow}
-              >
-                <Text style={[styles.followButtonText, isFollowing && styles.followingButtonText]}>
-                  {isFollowing ? 'Following' : 'Follow'}
-                </Text>
-              </Pressable>
+              {/* Only show Follow button if NOT the current user */}
+              {user && user.id !== note.userId && (
+                <Pressable 
+                  style={[styles.followButton, isFollowing && styles.followingButton]} 
+                  onPress={handleFollow}
+                >
+                  <Text style={[styles.followButtonText, isFollowing && styles.followingButtonText]}>
+                    {isFollowing ? 'Following' : 'Follow'}
+                  </Text>
+                </Pressable>
+              )}
             </View>
 
             <Text style={styles.description}>{note.description}</Text>

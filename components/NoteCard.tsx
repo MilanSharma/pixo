@@ -1,23 +1,41 @@
 import React from 'react';
-import { View, Text, StyleSheet, Pressable, Image } from 'react-native';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { Image } from 'expo-image';
 import { Heart, Trash2, X } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { Colors } from '@/constants/colors';
 import { Note } from '@/types';
+import { useVideoPlayer, VideoView } from 'expo-video';
 
 interface NoteCardProps {
   note: Note;
-  onPress?: () => void;
+  onPress?: (note: Note) => void;
   onRemove?: (note: Note) => void;
-  removeType?: 'delete' | 'remove'; // 'delete' = Trash icon, 'remove' = X icon
+  removeType?: 'delete' | 'remove';
 }
 
 export const NoteCard = ({ note, onPress, onRemove, removeType }: NoteCardProps) => {
   const router = useRouter();
 
   const handlePress = () => {
-    router.push(`/note/${note.id}`);
+    if (onPress) {
+      onPress(note);
+    } else {
+      router.push(`/note/${note.id}`);
+    }
   };
+
+  const mediaUri = note.media && note.media.length > 0 ? note.media[0] : null;
+  const isVideo = mediaUri && (mediaUri.toLowerCase().endsWith('.mp4') || mediaUri.toLowerCase().endsWith('.mov') || mediaUri.toLowerCase().endsWith('.webm'));
+
+  // Video Player for Thumbnail
+  // We use useVideoPlayer even in the card to render the first frame
+  // Note: For many cards this can be heavy, but it's the only way to get a frame without a backend thumbnail service
+  const player = useVideoPlayer(isVideo ? mediaUri : null, player => {
+      player.muted = true;
+      player.loop = false;
+      // We don't play it, just loading it shows the first frame (poster)
+  });
 
   return (
     <Pressable 
@@ -26,12 +44,31 @@ export const NoteCard = ({ note, onPress, onRemove, removeType }: NoteCardProps)
       delayLongPress={500}
     >
       <View style={styles.imageContainer}>
-          <Image
-            source={{ uri: note.media && note.media.length > 0 ? note.media[0] : 'https://via.placeholder.com/150' }}
-            style={styles.image}
-            resizeMode="cover"
-          />
-          {/* COMMON REMOVE BUTTON (Top Right Overlay) */}
+          {mediaUri ? (
+             isVideo ? (
+               <View style={styles.videoContainer}>
+                   <VideoView 
+                        style={styles.image} 
+                        player={player} 
+                        contentFit="cover" 
+                        nativeControls={false}
+                   />
+                   {/* Overlay to prevent video interaction in list view */}
+                   <View style={StyleSheet.absoluteFill} /> 
+               </View>
+             ) : (
+               <Image
+                 source={{ uri: mediaUri }}
+                 style={styles.image}
+                 contentFit="cover"
+                 transition={200}
+               />
+             )
+          ) : (
+             <View style={[styles.image, { backgroundColor: '#eee' }]} />
+          )}
+          
+          {/* REMOVE BUTTON */}
           {onRemove && (
               <Pressable 
                 style={styles.removeBtn} 
@@ -64,7 +101,7 @@ export const NoteCard = ({ note, onPress, onRemove, removeType }: NoteCardProps)
           
           <View style={styles.likesContainer}>
              <Heart size={14} color={Colors.light.icon} />
-             <Text style={styles.likes}>{note.likes}</Text>
+             <Text style={styles.likes}>{note.likes || 0}</Text>
           </View>
         </View>
       </View>
@@ -84,17 +121,22 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
     elevation: 2,
     flex: 1,
-    height: 280, // Fixed height for consistency
+    height: 280, 
   },
   imageContainer: {
-    height: 200, // Fixed image height
+    height: 200, 
     width: '100%',
     position: 'relative',
+    backgroundColor: '#f0f0f0',
   },
   image: {
     width: '100%',
     height: '100%',
-    backgroundColor: '#eee',
+  },
+  videoContainer: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#000',
   },
   removeBtn: {
       position: 'absolute',
@@ -124,7 +166,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    height: 24, // Fixed footer height to prevent retraction
+    height: 24,
   },
   userContainer: {
     flexDirection: 'row',

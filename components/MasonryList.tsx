@@ -11,6 +11,7 @@ interface MasonryListProps {
   ListHeaderComponent?: React.ReactNode;
   onRemoveItem?: (note: Note) => void;
   removeType?: 'delete' | 'remove';
+  onPressItem?: (note: Note) => void;
 }
 
 export const MasonryList = ({ 
@@ -19,7 +20,8 @@ export const MasonryList = ({
   refreshing, 
   ListHeaderComponent, 
   onRemoveItem,
-  removeType
+  removeType,
+  onPressItem
 }: MasonryListProps) => {
   const insets = useSafeAreaInsets();
   
@@ -63,6 +65,7 @@ export const MasonryList = ({
               note={item} 
               onRemove={onRemoveItem}
               removeType={removeType}
+              onPress={onPressItem}
             />
           ))}
         </View>
@@ -73,6 +76,7 @@ export const MasonryList = ({
               note={item} 
               onRemove={onRemoveItem}
               removeType={removeType}
+              onPress={onPressItem}
             />
           ))}
         </View>

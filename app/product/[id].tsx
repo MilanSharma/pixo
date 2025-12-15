@@ -24,7 +24,6 @@ export default function ProductDetailScreen() {
     const [loading, setLoading] = useState(true);
     const [isSaved, setIsSaved] = useState(false);
     
-    // Animation value for heart
     const scaleAnim = useRef(new Animated.Value(1)).current;
 
     useEffect(() => {
@@ -80,32 +79,26 @@ export default function ProductDetailScreen() {
         }
     };
 
-    const triggerHeartAnimation = () => {
-        Animated.sequence([
-            Animated.spring(scaleAnim, {
-                toValue: 1.3,
-                useNativeDriver: true,
-                speed: 50,
-            }),
-            Animated.spring(scaleAnim, {
-                toValue: 1,
-                useNativeDriver: true,
-                speed: 50,
-            }),
-        ]).start();
-    };
-
     const handleAddToCart = () => {
         if (product) {
             addToCart(product);
             setIsSaved(true);
-            triggerHeartAnimation();
+            Animated.sequence([
+                Animated.spring(scaleAnim, { toValue: 1.3, useNativeDriver: true, speed: 50 }),
+                Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, speed: 50 }),
+            ]).start();
         }
     };
 
     const handleBuyNow = async () => {
-        const url = product?.externalUrl || `https://www.amazon.com/s?k=${encodeURIComponent(product?.title || '')}`;
-        await WebBrowser.openBrowserAsync(url);
+        const url = product?.externalUrl;
+        if (url && url.startsWith('http')) {
+            await WebBrowser.openBrowserAsync(url);
+        } else {
+            // Fallback if URL is missing or invalid
+            const searchUrl = `https://www.amazon.com/s?k=${encodeURIComponent(product?.title || '')}`;
+            await WebBrowser.openBrowserAsync(searchUrl);
+        }
     };
 
     const handleShare = async () => {
@@ -128,7 +121,6 @@ export default function ProductDetailScreen() {
         if (!isSaved) {
             handleAddToCart();
         } else {
-            // Optional: Handle remove from wishlist here if needed, but usually detail page just adds
             setIsSaved(false);
         }
     };

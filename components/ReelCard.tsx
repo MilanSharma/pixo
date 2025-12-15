@@ -1,11 +1,12 @@
 import React, { useRef, useMemo, useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, Dimensions, Animated, Share } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Dimensions, Animated, Share, Alert } from 'react-native';
 import { Image } from 'expo-image';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { Heart, Bookmark, MessageCircle, Share2, Volume2, VolumeX, Play, Pause, ShoppingBag } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { Note } from '@/types';
 import { LinearGradient } from 'expo-linear-gradient';
+import { getProductByTitle } from '@/lib/database';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -127,10 +128,21 @@ export const ReelCard = ({
         router.push(`/search?q=${encodeURIComponent(tag.replace('#', ''))}`);
     };
 
-    const handleProductTagPress = () => {
+    const handleProductTagPress = async () => {
         if (note.productTags && note.productTags.length > 0) {
-            // Search for the first product tag
-            router.push(`/search?q=${encodeURIComponent(note.productTags[0])}`);
+            const tagName = note.productTags[0];
+            // Try to find exact match first
+            try {
+                const product = await getProductByTitle(tagName);
+                if (product) {
+                    router.push(`/product/${product.id}`);
+                } else {
+                    // Fallback to search if specific product ID not found
+                    router.push(`/search?q=${encodeURIComponent(tagName)}`);
+                }
+            } catch (e) {
+                router.push(`/search?q=${encodeURIComponent(tagName)}`);
+            }
         }
     };
 
