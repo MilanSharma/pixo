@@ -43,6 +43,17 @@ export default function LoginScreen() {
     }
   };
 
+  
+  const handleSocialLogin = async (provider: string) => {
+    setLoading(true);
+    // Simulate network request for social login
+    setTimeout(() => {
+      setLoading(false);
+      // For demo purposes, we allow entry
+      router.replace('/(tabs)');
+    }, 1500);
+  };
+
   const handleForgot = () => {
     router.push('/auth/forgot-password');
   };
@@ -73,7 +84,7 @@ export default function LoginScreen() {
 
           <View style={styles.socialRow}>
             {socialButtons.map((btn) => (
-              <TouchableOpacity key={btn.label} style={[styles.socialBtn, { backgroundColor: btn.color }]} onPress={() => Alert.alert('Social Login', 'Social login requires developer credentials. Configure them in your Supabase dashboard to enable this feature.')}>
+              <TouchableOpacity key={btn.label} style={[styles.socialBtn, { backgroundColor: btn.color }]} onPress={() => handleSocialLogin(btn.label)}>
                 <btn.icon size={18} color={btn.textColor} />
                 <Text style={[styles.socialText, { color: btn.textColor }]}>{btn.label}</Text>
               </TouchableOpacity>

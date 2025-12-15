@@ -63,7 +63,7 @@ function transformProductToNote(product: any, user: any): Note {
 export default function MeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { user, profile, refreshProfile } = useAuth();
+  const { user, profile, refreshProfile, loading: authLoading } = useAuth();
   const [activeTab, setActiveTab] = useState('Notes');
 
   const [notes, setNotes] = useState<Note[]>([]);
@@ -314,13 +314,37 @@ export default function MeScreen() {
 
   const displayData = getDisplayData();
 
-  if (!user || !profile) {
+  
+  if (!authLoading && !user) {
+    return (
+      <View style={[styles.container, styles.center, { paddingTop: insets.top }]}>
+        <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: '#f0f0f0', justifyContent: 'center', alignItems: 'center', marginBottom: 16 }}>
+            <Menu size={32} color="#ccc" />
+        </View>
+        <Text style={{ fontSize: 24, fontWeight: 'bold', color: Colors.light.text, marginBottom: 8 }}>
+          Profile
+        </Text>
+        <Text style={{ fontSize: 16, color: '#666', textAlign: 'center', marginBottom: 24, paddingHorizontal: 32 }}>
+          Sign in to view your profile, collections, and stats
+        </Text>
+        <Pressable 
+          style={{ backgroundColor: Colors.light.tint, paddingHorizontal: 48, paddingVertical: 14, borderRadius: 24 }}
+          onPress={() => router.push('/auth/login')}
+        >
+          <Text style={{ color: '#fff', fontWeight: '600', fontSize: 16 }}>Sign In</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
+  if (loading || (user && !profile)) {
     return (
       <View style={[styles.container, styles.center]}>
         <ActivityIndicator size="large" color={Colors.light.tint} />
       </View>
     );
   }
+
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>

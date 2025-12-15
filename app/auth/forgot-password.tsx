@@ -190,7 +190,7 @@ const styles = StyleSheet.create({
         color: '#111',
     },
     primaryButton: {
-        backgroundColor: Colors.light.tint,
+        backgroundColor: '#111827', // Dark professional color
         paddingVertical: 16,
         borderRadius: 12,
         alignItems: 'center',

@@ -16,7 +16,7 @@ const TABS = ['Notifications', 'Chats'];
 export default function MessagesScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const [activeTab, setActiveTab] = useState('Chats');
   
   // Data State
@@ -163,6 +163,28 @@ export default function MessagesScreen() {
           )}
       </View>
   );
+
+  
+  if (!loading && !user) {
+    return (
+      <View style={[styles.container, styles.center, { paddingTop: insets.top }]}>
+        <MessageCircle size={64} color="#ccc" />
+        <Text style={{ fontSize: 20, fontWeight: 'bold', color: Colors.light.text, marginTop: 16 }}>
+          Messages
+        </Text>
+        <Text style={{ fontSize: 16, color: '#666', textAlign: 'center', marginVertical: 12, paddingHorizontal: 32 }}>
+          Sign in to view your messages and notifications
+        </Text>
+        <Pressable 
+          style={{ backgroundColor: Colors.light.tint, paddingHorizontal: 32, paddingVertical: 12, borderRadius: 24 }}
+          onPress={() => router.push('/auth/login')}
+        >
+          <Text style={{ color: '#fff', fontWeight: '600', fontSize: 16 }}>Sign In</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
