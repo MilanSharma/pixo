@@ -3,7 +3,7 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingVi
 import { router } from 'expo-router';
 import { signIn } from '@/lib/auth';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Chrome, Apple, Facebook, Eye, EyeOff, Lock, Mail, ArrowLeft } from 'lucide-react-native';
+import { Eye, EyeOff, Lock, Mail, ArrowLeft } from 'lucide-react-native';
 import { z } from 'zod';
 
 const loginSchema = z.object({
@@ -43,26 +43,9 @@ export default function LoginScreen() {
     }
   };
 
-  
-  const handleSocialLogin = async (provider: string) => {
-    setLoading(true);
-    // Simulate network request for social login
-    setTimeout(() => {
-      setLoading(false);
-      // For demo purposes, we allow entry
-      router.replace('/(tabs)');
-    }, 1500);
-  };
-
   const handleForgot = () => {
     router.push('/auth/forgot-password');
   };
-
-  const socialButtons = [
-    { label: 'Continue with Google', icon: Chrome, color: '#F2F2F2', textColor: '#1F1F1F' },
-    { label: 'Continue with Apple', icon: Apple, color: '#0B0B0B', textColor: '#FFFFFF' },
-    { label: 'Continue with Facebook', icon: Facebook, color: '#1877F2', textColor: '#FFFFFF' },
-  ];
 
   return (
     <LinearGradient colors={['#f7f8fa', '#eef2f5']} style={styles.container}>
@@ -82,20 +65,7 @@ export default function LoginScreen() {
             <Text style={styles.subtitle}>Log in to keep exploring inspiration.</Text>
           </View>
 
-          <View style={styles.socialRow}>
-            {socialButtons.map((btn) => (
-              <TouchableOpacity key={btn.label} style={[styles.socialBtn, { backgroundColor: btn.color }]} onPress={() => handleSocialLogin(btn.label)}>
-                <btn.icon size={18} color={btn.textColor} />
-                <Text style={[styles.socialText, { color: btn.textColor }]}>{btn.label}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          <View style={styles.dividerRow}>
-            <View style={styles.divider} />
-            <Text style={styles.dividerText}>or continue with email</Text>
-            <View style={styles.divider} />
-          </View>
+          {/* Social Login removed for Beta - Email/Pass only for stability */}
 
           <View style={styles.form}>
             <View style={styles.inputWrap}>
@@ -177,7 +147,7 @@ const styles = StyleSheet.create({
   },
   brandBlock: {
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 32,
   },
   logo: {
     fontSize: 40,
@@ -196,41 +166,6 @@ const styles = StyleSheet.create({
     color: '#555',
     marginTop: 4,
     textAlign: 'center',
-  },
-  socialRow: {
-    gap: 12,
-    marginBottom: 16,
-  },
-  socialBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    borderRadius: 14,
-    gap: 10,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-  },
-  socialText: {
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  dividerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginBottom: 16,
-  },
-  divider: {
-    flex: 1,
-    height: 1,
-    backgroundColor: '#e5e7eb',
-  },
-  dividerText: {
-    fontSize: 12,
-    color: '#777',
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
   },
   form: {
     backgroundColor: '#fff',

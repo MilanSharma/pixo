@@ -3,13 +3,15 @@ import React, { useEffect, useState, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Alert, Share, Platform, Animated } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { Image } from 'expo-image';
-import { ArrowLeft, Share as ShareIcon, Heart, ShoppingBag, ExternalLink } from 'lucide-react-native';
+import { ArrowLeft, Share as ShareIcon, Heart, ShoppingBag, ExternalLink, BarChart2, Flag, ShieldCheck, Zap } from 'lucide-react-native';
 import { Colors } from '@/constants/colors';
 import { MOCK_PRODUCTS } from '@/mocks/data';
 import { Product } from '@/types';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCart } from '@/context/CartContext';
-import { getProductById } from '@/lib/database';
+import { getProductById, trackProductClick, boostProduct, reportContent, getVerifiedStatus } from '@/lib/database';
+import { useAuth } from '@/context/AuthContext';
+import { PaymentModal } from '@/components/PaymentModal';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -19,10 +21,14 @@ export default function ProductDetailScreen() {
     const router = useRouter();
     const insets = useSafeAreaInsets();
     const { addToCart, isInCart } = useCart();
+    const { user } = useAuth();
     
     const [product, setProduct] = useState<Product | null>(null);
     const [loading, setLoading] = useState(true);
     const [isSaved, setIsSaved] = useState(false);
+    const [clicks, setClicks] = useState(0); 
+    const [isVerifiedSeller, setIsVerifiedSeller] = useState(false);
+    const [showPayment, setShowPayment] = useState(false);
     
     const scaleAnim = useRef(new Animated.Value(1)).current;
 
@@ -54,8 +60,16 @@ export default function ProductDetailScreen() {
                         description: data.description || '',
                         brandName: data.brand_name || 'Generic',
                         brandLogo: data.brand_logo || '',
-                        externalUrl: data.external_url 
+                        externalUrl: data.external_url,
+                        userId: data.user_id 
                     });
+                    setClicks(data.clicks || 0);
+                    
+                    // Check if seller is verified
+                    if (data.user_id) {
+                        const verified = await getVerifiedStatus(data.user_id);
+                        setIsVerifiedSeller(verified);
+                    }
                 }
             } else {
                 // Fetch from Mocks
@@ -91,11 +105,14 @@ export default function ProductDetailScreen() {
     };
 
     const handleBuyNow = async () => {
+        if (productId && UUID_REGEX.test(productId)) {
+            trackProductClick(productId);
+        }
+
         const url = product?.externalUrl;
         if (url && url.startsWith('http')) {
             await WebBrowser.openBrowserAsync(url);
         } else {
-            // Fallback if URL is missing or invalid
             const searchUrl = `https://www.amazon.com/s?k=${encodeURIComponent(product?.title || '')}`;
             await WebBrowser.openBrowserAsync(searchUrl);
         }
@@ -129,6 +146,35 @@ export default function ProductDetailScreen() {
         router.replace('/(tabs)/shop');
     };
 
+    const handleReport = () => {
+        if (!user) {
+            Alert.alert('Sign In', 'Please sign in to report content.');
+            return;
+        }
+        
+        Alert.alert(
+            'Report Product',
+            'Why are you reporting this product?',
+            [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Scam / Fake', onPress: () => submitReport('scam') },
+                { text: 'Inappropriate', onPress: () => submitReport('inappropriate') },
+                { text: 'Broken Link', onPress: () => submitReport('broken_link') },
+            ]
+        );
+    };
+
+    const submitReport = async (reason: string) => {
+        try {
+            if (product && user) {
+                await reportContent(user.id, product.id, 'product', reason);
+                Alert.alert('Report Sent', 'Thank you for helping keep Pixo safe.');
+            }
+        } catch (e) {
+            Alert.alert('Error', 'Could not send report. Please try again.');
+        }
+    };
+
     if (loading) {
         return (
             <View style={styles.loadingContainer}>
@@ -148,6 +194,25 @@ export default function ProductDetailScreen() {
         );
     }
 
+    const isOwner = user && product.userId === user.id;
+    const handleBoost = () => {
+        setShowPayment(true);
+    };
+
+    const processBoost = async () => {
+        if(!user || !product) return;
+        setLoading(true);
+        try {
+            await boostProduct(user.id, product.id);
+            Alert.alert("Success", "Your post is now promoted!");
+        } catch(e) {
+            Alert.alert("Error", "Payment failed or insufficient funds.");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+
     return (
         <View style={styles.container}>
             <Stack.Screen options={{ headerShown: false }} />
@@ -166,15 +231,39 @@ export default function ProductDetailScreen() {
                 </View>
 
                 <View style={styles.contentContainer}>
-                    <View style={styles.priceRow}>
-                        <Text style={styles.price}>${product.price.toFixed(2)}</Text>
+                    <View style={styles.headerRow}>
+                        <View>
+                            <View style={styles.priceRow}>
+                                <Text style={styles.price}>${product.price}</Text>
+                            </View>
+                            <Text style={styles.title}>{product.title}</Text>
+                        </View>
+                        
+{isOwner && (
+                            <View style={{flexDirection:'row', gap:8}}>
+                                <View style={styles.analyticsBadge}>
+                                    <BarChart2 size={16} color={Colors.light.tint} />
+                                    <Text style={styles.analyticsText}>{clicks} clicks</Text>
+                                </View>
+                                <Pressable style={[styles.analyticsBadge, {backgroundColor: '#fef9c3'}]} onPress={handleBoost}>
+                                    <Zap size={16} color="#ca8a04" />
+                                    <Text style={[styles.analyticsText, {color: '#ca8a04'}]}>Boost</Text>
+                                </Pressable>
+                            </View>
+                        )}
                     </View>
 
-                    <Text style={styles.title}>{product.title}</Text>
-
-                    <View style={styles.brandContainer}>
-                        {product.brandLogo ? <Image source={{ uri: product.brandLogo }} style={styles.brandLogo} /> : null}
-                        <Text style={styles.brandName}>{product.brandName}</Text>
+                    <View style={styles.brandRow}>
+                        <View style={styles.brandContainer}>
+                            {product.brandLogo ? <Image source={{ uri: product.brandLogo }} style={styles.brandLogo} /> : null}
+                            <Text style={styles.brandName}>{product.brandName || 'Brand'}</Text>
+                            {isVerifiedSeller && <ShieldCheck size={16} color={Colors.light.tint} style={{marginLeft: 4}} />}
+                        </View>
+                        
+                        <Pressable onPress={handleReport} style={styles.reportBtn}>
+                            <Flag size={16} color="#999" />
+                            <Text style={styles.reportText}>Report</Text>
+                        </Pressable>
                     </View>
 
                     <Text style={styles.sectionTitle}>Description</Text>
@@ -208,6 +297,14 @@ export default function ProductDetailScreen() {
                     </Pressable>
                 </View>
             </View>
+            <PaymentModal 
+                visible={showPayment} 
+                onClose={() => setShowPayment(false)}
+                onPay={processBoost}
+                amount={5.00}
+                title="Boost Post"
+                description="Promote this product for 7 days"
+            />
         </View>
     );
 }
@@ -257,6 +354,25 @@ const styles = StyleSheet.create({
     contentContainer: {
         padding: 20,
     },
+    headerRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+    },
+    analyticsBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        backgroundColor: '#fff0f2',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 16,
+    },
+    analyticsText: {
+        color: Colors.light.tint,
+        fontWeight: 'bold',
+        fontSize: 14,
+    },
     priceRow: {
         flexDirection: 'row',
         alignItems: 'baseline',
@@ -273,11 +389,17 @@ const styles = StyleSheet.create({
         color: '#000',
         marginBottom: 16,
         lineHeight: 28,
+        maxWidth: 250,
+    },
+    brandRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 24,
     },
     brandContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 24,
         backgroundColor: '#f9f9f9',
         padding: 12,
         borderRadius: 8,
@@ -292,6 +414,16 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: '500',
         color: '#333',
+    },
+    reportBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        padding: 8,
+    },
+    reportText: {
+        fontSize: 12,
+        color: '#999',
     },
     sectionTitle: {
         fontSize: 16,

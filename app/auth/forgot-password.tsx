@@ -28,7 +28,7 @@ export default function ForgotPasswordScreen() {
         setLoading(true);
         try {
             const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-                redirectTo: 'pixo://reset-password',
+                redirectTo: 'pixo://auth/reset-password',
             });
 
             if (error) throw error;
@@ -56,15 +56,15 @@ export default function ForgotPasswordScreen() {
                         <Text style={styles.emailHighlight}>{email}</Text>
                     </Text>
                     <Text style={styles.successHint}>
-                        Didn't receive the email? Check your spam folder or try again.
+                        Click the link on this device to set a new password.
                     </Text>
 
                     <Pressable style={styles.primaryButton} onPress={() => router.replace('/auth/login')}>
                         <Text style={styles.primaryButtonText}>Back to Login</Text>
                     </Pressable>
 
-                    <Pressable style={styles.retryButton} onPress={() => setSent(false)}>
-                        <Text style={styles.retryButtonText}>Try Different Email</Text>
+                    <Pressable style={styles.textBtn} onPress={() => setSent(false)}>
+                        <Text style={styles.textBtnText}>Try Different Email</Text>
                     </Pressable>
                 </View>
             </View>
@@ -85,46 +85,49 @@ export default function ForgotPasswordScreen() {
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 style={styles.content}
             >
-                <View style={styles.iconContainer}>
-                    <Mail size={48} color={Colors.light.tint} />
-                </View>
-
-                <Text style={styles.title}>Forgot Password?</Text>
-                <Text style={styles.subtitle}>
-                    No worries! Enter your email address and we'll send you a link to reset your password.
-                </Text>
-
-                <View style={styles.inputContainer}>
-                    <Mail size={20} color="#999" />
-                    <TextInput
-                        style={styles.input}
-                        placeholder="Enter your email"
-                        placeholderTextColor="#999"
-                        value={email}
-                        onChangeText={setEmail}
-                        autoCapitalize="none"
-                        keyboardType="email-address"
-                        autoComplete="email"
-                    />
-                </View>
-
-                <Pressable
-                    style={[styles.primaryButton, loading && styles.disabledButton]}
-                    onPress={handleResetPassword}
-                    disabled={loading}
-                >
-                    {loading ? (
-                        <ActivityIndicator color="#fff" />
-                    ) : (
-                        <Text style={styles.primaryButtonText}>Send Reset Link</Text>
-                    )}
-                </Pressable>
-
-                <Pressable style={styles.backToLogin} onPress={() => router.back()}>
-                    <Text style={styles.backToLoginText}>
-                        Remember your password? <Text style={styles.loginLink}>Sign In</Text>
+                <View style={styles.headerBlock}>
+                    <View style={styles.iconContainer}>
+                        <Mail size={32} color={Colors.light.tint} />
+                    </View>
+                    <Text style={styles.title}>Forgot Password?</Text>
+                    <Text style={styles.subtitle}>
+                        Enter your email and we'll send you a link to reset your password.
                     </Text>
-                </Pressable>
+                </View>
+
+                <View style={styles.form}>
+                    <View style={styles.inputContainer}>
+                        <Mail size={20} color="#999" />
+                        <TextInput
+                            style={styles.input}
+                            placeholder="Enter your email"
+                            placeholderTextColor="#999"
+                            value={email}
+                            onChangeText={setEmail}
+                            autoCapitalize="none"
+                            keyboardType="email-address"
+                            autoComplete="email"
+                        />
+                    </View>
+
+                    <Pressable
+                        style={[styles.primaryButton, loading && styles.disabledButton]}
+                        onPress={handleResetPassword}
+                        disabled={loading}
+                    >
+                        {loading ? (
+                            <ActivityIndicator color="#fff" />
+                        ) : (
+                            <Text style={styles.primaryButtonText}>Send Reset Link</Text>
+                        )}
+                    </Pressable>
+
+                    <Pressable style={styles.backToLogin} onPress={() => router.back()}>
+                        <Text style={styles.backToLoginText}>
+                            Remember your password? <Text style={styles.loginLink}>Sign In</Text>
+                        </Text>
+                    </Pressable>
+                </View>
             </KeyboardAvoidingView>
         </View>
     );
@@ -140,37 +143,43 @@ const styles = StyleSheet.create({
         paddingVertical: 12,
     },
     backBtn: {
-        padding: 4,
-        width: 40,
+        padding: 8,
+        marginLeft: -8,
     },
     content: {
         flex: 1,
         paddingHorizontal: 24,
         justifyContent: 'center',
+        paddingBottom: 100, // Push content up slightly
+    },
+    headerBlock: {
+        alignItems: 'center',
+        marginBottom: 32,
     },
     iconContainer: {
-        width: 96,
-        height: 96,
-        borderRadius: 48,
-        backgroundColor: '#f0f7ff',
+        width: 64,
+        height: 64,
+        borderRadius: 32,
+        backgroundColor: '#fff0f2',
         justifyContent: 'center',
         alignItems: 'center',
-        alignSelf: 'center',
-        marginBottom: 24,
+        marginBottom: 20,
     },
     title: {
         fontSize: 28,
         fontWeight: '800',
         color: '#111',
         textAlign: 'center',
-        marginBottom: 12,
+        marginBottom: 8,
     },
     subtitle: {
-        fontSize: 15,
+        fontSize: 16,
         color: '#666',
         textAlign: 'center',
-        lineHeight: 22,
-        marginBottom: 32,
+        lineHeight: 24,
+    },
+    form: {
+        gap: 16,
     },
     inputContainer: {
         flexDirection: 'row',
@@ -180,9 +189,8 @@ const styles = StyleSheet.create({
         borderRadius: 12,
         paddingHorizontal: 16,
         paddingVertical: 14,
-        backgroundColor: '#fafafa',
+        backgroundColor: '#f9fafb',
         gap: 12,
-        marginBottom: 20,
     },
     input: {
         flex: 1,
@@ -190,10 +198,12 @@ const styles = StyleSheet.create({
         color: '#111',
     },
     primaryButton: {
-        backgroundColor: '#111827', // Dark professional color
+        backgroundColor: '#111827',
         paddingVertical: 16,
         borderRadius: 12,
         alignItems: 'center',
+        width: '100%',
+        marginTop: 8,
     },
     disabledButton: {
         opacity: 0.7,
@@ -204,8 +214,8 @@ const styles = StyleSheet.create({
         fontWeight: '600',
     },
     backToLogin: {
-        marginTop: 24,
         alignItems: 'center',
+        marginTop: 16,
     },
     backToLoginText: {
         fontSize: 14,
@@ -215,16 +225,19 @@ const styles = StyleSheet.create({
         color: Colors.light.tint,
         fontWeight: '600',
     },
+    
+    // Success View Styles
     successContainer: {
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
         paddingHorizontal: 32,
+        paddingBottom: 80,
     },
     successIcon: {
-        width: 120,
-        height: 120,
-        borderRadius: 60,
+        width: 100,
+        height: 100,
+        borderRadius: 50,
         backgroundColor: '#dcfce7',
         justifyContent: 'center',
         alignItems: 'center',
@@ -235,12 +248,13 @@ const styles = StyleSheet.create({
         fontWeight: '700',
         color: '#111',
         marginBottom: 12,
+        textAlign: 'center',
     },
     successMessage: {
         fontSize: 15,
         color: '#666',
         textAlign: 'center',
-        lineHeight: 22,
+        lineHeight: 24,
         marginBottom: 8,
     },
     emailHighlight: {
@@ -253,11 +267,11 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         marginBottom: 32,
     },
-    retryButton: {
-        marginTop: 12,
-        paddingVertical: 12,
+    textBtn: {
+        marginTop: 20,
+        padding: 10,
     },
-    retryButtonText: {
+    textBtnText: {
         color: Colors.light.tint,
         fontSize: 14,
         fontWeight: '600',

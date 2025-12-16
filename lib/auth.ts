@@ -1,9 +1,10 @@
 import { supabase } from './supabase';
 import { uploadImage } from './storage';
+import { setReferral } from './database'; // Import the new function
 
 const phoneRegex = /^\+?[0-9]{7,15}$/;
 
-export async function signUp(params: { identifier: string; password: string; username: string; dateOfBirth?: string; avatarUri?: string }) {
+export async function signUp(params: { identifier: string; password: string; username: string; dateOfBirth?: string; avatarUri?: string; referralCode?: string }) {
   const isPhone = phoneRegex.test(params.identifier);
   const signUpPayload = isPhone
     ? { phone: params.identifier, password: params.password }
@@ -12,7 +13,6 @@ export async function signUp(params: { identifier: string; password: string; use
   const { data: authData, error: authError } = await supabase.auth.signUp(signUpPayload);
 
   if (authError) {
-    // Provide user-friendly error messages
     if (authError.message.includes('already registered')) {
       throw new Error('This email/phone is already registered. Please sign in instead.');
     } else if (authError.message.includes('Password')) {
@@ -46,7 +46,11 @@ export async function signUp(params: { identifier: string; password: string; use
 
   if (profileError) {
     console.error('Profile creation error:', profileError);
-    // Don't throw error, allow signup to proceed
+  }
+  
+  // === REFERRAL HANDLING ===
+  if (params.referralCode) {
+      await setReferral(authData.user.id, params.referralCode);
   }
 
   // Check if email verification is required
@@ -79,7 +83,6 @@ export async function signIn(identifier: string, password: string) {
   }
 
   if (error) {
-    // Provide user-friendly error messages
     if (error.message.includes('Invalid login credentials')) {
       throw new Error('Invalid email/phone or password. Please try again.');
     } else if (error.message.includes('Email not confirmed')) {

@@ -76,7 +76,6 @@ export default function NotificationsScreen() {
                 value={settings[settingKey]}
                 onValueChange={(value) => updateSetting(settingKey, value)}
                 trackColor={{ true: Colors.light.tint }}
-                disabled={settingKey !== 'pushEnabled' && !settings.pushEnabled}
             />
         </View>
     );
@@ -143,14 +142,6 @@ export default function NotificationsScreen() {
                     description="Popular content you might like"
                     settingKey="trending"
                 />
-
-                {!settings.pushEnabled && (
-                    <View style={styles.disabledNotice}>
-                        <Text style={styles.disabledText}>
-                            Push notifications are disabled. Enable them above to customize individual settings.
-                        </Text>
-                    </View>
-                )}
             </ScrollView>
         </View>
     );
@@ -226,16 +217,5 @@ const styles = StyleSheet.create({
         fontSize: 13,
         color: '#888',
         marginTop: 2,
-    },
-    disabledNotice: {
-        margin: 20,
-        padding: 16,
-        backgroundColor: '#fef3c7',
-        borderRadius: 12,
-    },
-    disabledText: {
-        color: '#92400e',
-        fontSize: 14,
-        lineHeight: 20,
     },
 });

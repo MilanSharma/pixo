@@ -4,8 +4,9 @@ import { router } from 'expo-router';
 import { signUp } from '@/lib/auth';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
-import { Calendar, User, Camera, ArrowLeft, ArrowRight, Check } from 'lucide-react-native';
+import { Calendar, User, Camera, ArrowLeft, ArrowRight, Check, Ticket } from 'lucide-react-native';
 import { z } from 'zod';
+import { checkReferralCode } from '@/lib/database';
 
 const accountSchema = z.object({
   identifier: z.string().min(1, 'Enter email or phone').refine((value) => {
@@ -24,6 +25,7 @@ export default function RegisterScreen() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [username, setUsername] = useState('');
   const [dob, setDob] = useState('');
+  const [referralCode, setReferralCode] = useState('');
   const [avatar, setAvatar] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -65,7 +67,7 @@ export default function RegisterScreen() {
 
   const pickAvatar = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: 'images',
+      mediaTypes: ['images'],
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.9,
@@ -82,6 +84,17 @@ export default function RegisterScreen() {
     }
     setLoading(true);
     setError('');
+    
+    // Verify referral if provided
+    if (referralCode.trim()) {
+        const isValid = await checkReferralCode(referralCode.trim());
+        if (!isValid) {
+            setError('Invalid referral code');
+            setLoading(false);
+            return;
+        }
+    }
+    
     try {
       await signUp({
         identifier,
@@ -89,16 +102,15 @@ export default function RegisterScreen() {
         username: username.trim(),
         dateOfBirth: dob,
         avatarUri: avatar || undefined,
+        referralCode: referralCode.trim() || undefined
       });
 
-      // If successful and session exists, go to main app
       Alert.alert(
         'Account Created!',
         'Welcome to Pixo! Your account has been created successfully.',
         [{ text: 'Continue', onPress: () => router.replace('/(tabs)') }]
       );
     } catch (err: any) {
-      // Check if this is a verification required error
       if (err.message && err.message.startsWith('VERIFICATION_REQUIRED:')) {
         const message = err.message.replace('VERIFICATION_REQUIRED:', '');
         Alert.alert(
@@ -186,6 +198,19 @@ export default function RegisterScreen() {
               autoCapitalize="none"
             />
           </View>
+          
+          <View style={styles.inputRow}>
+            <Ticket size={18} color="#777" />
+            <TextInput
+              style={styles.input}
+              placeholder="Referral Code (Optional)"
+              placeholderTextColor="#999"
+              value={referralCode}
+              onChangeText={setReferralCode}
+              autoCapitalize="characters"
+            />
+          </View>
+
           <TouchableOpacity style={styles.nextButton} onPress={handleNextFromStep2}>
             <Text style={styles.nextText}>Continue</Text>
             <ArrowRight size={18} color="#fff" />

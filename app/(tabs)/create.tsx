@@ -1,13 +1,13 @@
 import React, { useMemo, useRef, useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TextInput, Pressable, ScrollView, Alert, ActivityIndicator, Modal, PanResponder, Image, KeyboardAvoidingView, Platform } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { Camera, MapPin, X, SlidersHorizontal, Tag, Search, Check, Play, Film, ShoppingBag, Link } from 'lucide-react-native';
+import { Camera, MapPin, X, SlidersHorizontal, Tag, Search, Check, Play, Film, ShoppingBag, Link, ShieldCheck } from 'lucide-react-native';
 import { Colors } from '@/constants/colors';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { uploadMultipleImages, uploadImage } from '@/lib/storage';
-import { createNote, getProducts, createProduct } from '@/lib/database';
+import { createNote, getProducts, createProduct, searchProducts } from '@/lib/database';
 import { Product } from '@/types';
 
 const ITEM_WIDTH = 120;
@@ -52,17 +52,52 @@ export default function CreateScreen() {
   // Product Tagging State
   const [productModalVisible, setProductModalVisible] = useState(false);
   const [productQuery, setProductQuery] = useState('');
-  const [availableProducts, setAvailableProducts] = useState<Product[]>([]);
+  const [searchResults, setSearchResults] = useState<Product[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
 
   useEffect(() => {
-    loadProductsForTagging();
+    loadInitialProducts();
   }, []);
 
-  const loadProductsForTagging = async () => {
+  useEffect(() => {
+      const delayDebounceFn = setTimeout(() => {
+          if (productQuery.trim().length > 2) {
+              performSearch(productQuery);
+          } else if (productQuery.trim().length === 0) {
+              loadInitialProducts();
+          }
+      }, 500);
+
+      return () => clearTimeout(delayDebounceFn);
+  }, [productQuery]);
+
+  const loadInitialProducts = async () => {
     try {
-      const data = await getProducts(100); 
+      const data = await getProducts(20); 
       if (data) {
-        const mapped: Product[] = data.map((p: any) => ({
+        setSearchResults(mapProducts(data));
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const performSearch = async (query: string) => {
+      setIsSearching(true);
+      try {
+          const data = await searchProducts(query);
+          if (data) {
+              setSearchResults(mapProducts(data));
+          }
+      } catch (e) {
+          console.error(e);
+      } finally {
+          setIsSearching(false);
+      }
+  };
+
+  const mapProducts = (data: any[]): Product[] => {
+      return data.map((p: any) => ({
           id: p.id,
           brandId: 'unknown',
           title: p.title,
@@ -72,21 +107,8 @@ export default function CreateScreen() {
           brandName: p.brand_name,
           brandLogo: p.brand_logo,
           externalUrl: p.external_url
-        }));
-        setAvailableProducts(mapped);
-      }
-    } catch (e) {
-      console.error("Failed to load products for tagging", e);
-    }
+      }));
   };
-
-  const productResults = useMemo(() => {
-    if (!productQuery.trim()) return availableProducts.slice(0, 10);
-    return availableProducts.filter(p => 
-      p.title.toLowerCase().includes(productQuery.toLowerCase()) || 
-      (p.brandName && p.brandName.toLowerCase().includes(productQuery.toLowerCase()))
-    ).slice(0, 10);
-  }, [productQuery, availableProducts]);
 
   const panResponder = useMemo(() => PanResponder.create({
     onStartShouldSetPanResponder: () => draggingIndex !== null,
@@ -108,7 +130,7 @@ export default function CreateScreen() {
   const pickMedia = async () => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images', 'videos', 'livePhotos'], // Fixed: Use array of strings
+        mediaTypes: ['images', 'videos', 'livePhotos'],
         allowsMultipleSelection: true,
         selectionLimit: 9 - media.length,
         quality: 1,
@@ -131,7 +153,7 @@ export default function CreateScreen() {
   const pickProductImage = async () => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images', 'livePhotos'], // Fixed: Use array of strings
+        mediaTypes: ['images'],
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.8,
@@ -217,6 +239,13 @@ export default function CreateScreen() {
     }
   };
 
+  const isValidUrl = (url: string) => {
+    if (!url) return true;
+    const lowerUrl = url.toLowerCase();
+    // Allow any HTTP/HTTPS link for now (Relaxed for testing)
+    return lowerUrl.startsWith('http');
+  };
+
   const publishProduct = async () => {
       if (!prodImage) {
           Alert.alert('Error', 'Please add a product image');
@@ -224,6 +253,13 @@ export default function CreateScreen() {
       }
       if (!prodTitle.trim() || !prodPrice.trim()) {
           Alert.alert('Error', 'Title and Price are required');
+          return;
+      }
+      if (prodLink.trim() && !isValidUrl(prodLink.trim())) {
+          Alert.alert(
+              'Invalid Link', 
+              'Please enter a valid URL starting with http:// or https://'
+          );
           return;
       }
 
@@ -265,7 +301,6 @@ export default function CreateScreen() {
       setProdLink('');
       setProdDesc('');
       
-      // Navigate to home or shop based on what was created
       if (createMode === 'story') {
           router.replace('/(tabs)/');
       } else {
@@ -464,17 +499,21 @@ export default function CreateScreen() {
                 </View>
 
                 <View style={styles.inputGroup}>
-                    <Text style={styles.label}>Affiliate / Store Link</Text>
+                    <View style={{flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between'}}>
+                        <Text style={styles.label}>Affiliate / Store Link</Text>
+                        {/* Removed Trust Shield for MVP to reduce confusion */}
+                    </View>
                     <View style={styles.linkInputContainer}>
                         <Link size={18} color="#999" />
                         <TextInput 
                             style={styles.linkInput} 
-                            placeholder="https://..." 
+                            placeholder="https://your-shop.com/..." 
                             value={prodLink} 
                             onChangeText={setProdLink} 
                             autoCapitalize="none"
                         />
                     </View>
+                    <Text style={styles.helperText}>Any valid https link is allowed.</Text>
                 </View>
 
                 <View style={styles.inputGroup}>
@@ -493,7 +532,6 @@ export default function CreateScreen() {
       </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* MODALS */}
       <Modal visible={editorVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
@@ -584,10 +622,10 @@ export default function CreateScreen() {
               />
             </View>
             <ScrollView style={{ maxHeight: 240, marginVertical: 10 }}>
-              {productResults.length === 0 ? (
+              {searchResults.length === 0 ? (
                 <Text style={{ textAlign: 'center', color: '#999', marginVertical: 20 }}>No products found</Text>
               ) : (
-                productResults.map(p => (
+                searchResults.map(p => (
                   <Pressable key={p.id} style={styles.productRow} onPress={() => {
                     if (!productTags.includes(p.title)) setProductTags([...productTags, p.title]);
                   }}>
@@ -929,6 +967,11 @@ const styles = StyleSheet.create({
       paddingVertical: 12,
       fontSize: 16,
       color: 'blue',
+  },
+  helperText: {
+      fontSize: 11,
+      color: '#999',
+      marginTop: 4,
   },
 
   modalOverlay: {

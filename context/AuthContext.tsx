@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useState, ReactNode, useRef } from 'react';
 import { User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import { getProfile } from '@/lib/auth';
@@ -32,17 +32,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
-
-  // Use a ref to always have access to the latest user value
-  const userRef = React.useRef<User | null>(null);
   
-  // Keep the ref in sync with user state
-  React.useEffect(() => {
+  const userRef = useRef<User | null>(null);
+
+  useEffect(() => {
     userRef.current = user;
   }, [user]);
 
   const refreshProfile = async () => {
-    // Use the ref to get the current user value, avoiding stale closure issues
     const currentUser = userRef.current;
     if (currentUser) {
       try {
@@ -55,25 +52,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        getProfile(session.user.id)
-          .then(setProfile)
-          .catch(console.error);
-      }
-      setLoading(false);
-    });
+    const initSession = async () => {
+        try {
+            const { data: { session } } = await supabase.auth.getSession();
+            setUser(session?.user ?? null);
+            if (session?.user) {
+                const p = await getProfile(session.user.id).catch(() => null);
+                setProfile(p);
+            }
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setLoading(false);
+        }
+    };
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    initSession();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setUser(session?.user ?? null);
       if (session?.user) {
-        getProfile(session.user.id)
-          .then(setProfile)
-          .catch(console.error);
+        const p = await getProfile(session.user.id).catch(() => null);
+        setProfile(p);
       } else {
         setProfile(null);
       }
+      setLoading(false);
     });
 
     return () => subscription.unsubscribe();

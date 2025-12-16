@@ -26,15 +26,14 @@ export const NoteCard = ({ note, onPress, onRemove, removeType }: NoteCardProps)
   };
 
   const mediaUri = note.media && note.media.length > 0 ? note.media[0] : null;
+  // Basic check for video extension
   const isVideo = mediaUri && (mediaUri.toLowerCase().endsWith('.mp4') || mediaUri.toLowerCase().endsWith('.mov') || mediaUri.toLowerCase().endsWith('.webm'));
 
-  // Video Player for Thumbnail
-  // We use useVideoPlayer even in the card to render the first frame
-  // Note: For many cards this can be heavy, but it's the only way to get a frame without a backend thumbnail service
+  // If video, setup player for thumbnail
   const player = useVideoPlayer(isVideo ? mediaUri : null, player => {
       player.muted = true;
       player.loop = false;
-      // We don't play it, just loading it shows the first frame (poster)
+      // We don't play it, just loading it displays the first frame
   });
 
   return (
@@ -53,7 +52,7 @@ export const NoteCard = ({ note, onPress, onRemove, removeType }: NoteCardProps)
                         contentFit="cover" 
                         nativeControls={false}
                    />
-                   {/* Overlay to prevent video interaction in list view */}
+                   {/* Overlay to prevent interactions */}
                    <View style={StyleSheet.absoluteFill} /> 
                </View>
              ) : (

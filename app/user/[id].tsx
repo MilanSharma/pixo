@@ -9,7 +9,7 @@ import { MasonryList } from '@/components/MasonryList';
 import { MOCK_USERS, MOCK_NOTES } from '@/mocks/data';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/context/AuthContext';
-import { followUser, getFollowStatus, getUserNotes } from '@/lib/database';
+import { followUser, getFollowStatus, getUserNotes, blockUser } from '@/lib/database';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar } from 'expo-status-bar';
 
@@ -134,7 +134,17 @@ export default function UserProfileScreen() {
         { 
           text: 'Block User', 
           style: 'destructive', 
-          onPress: () => Alert.alert('Blocked', `You have blocked @${userProfile?.username}.`) 
+          onPress: async () => {
+             if(!currentUser) return;
+             try {
+                 await blockUser(currentUser.id, userId);
+                 Alert.alert('Blocked', `You have blocked @${userProfile?.username}.`, [
+                     { text: 'Go Home', onPress: () => router.replace('/') }
+                 ]);
+             } catch(e) {
+                 Alert.alert('Error', 'Could not block user.');
+             }
+          } 
         },
         { 
           text: 'Cancel', 

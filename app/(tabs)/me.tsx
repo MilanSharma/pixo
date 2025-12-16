@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable, ActivityIndicator, Share, Alert } from 'react-native';
 import { Image } from 'expo-image';
-import { Settings, Share2, Menu } from 'lucide-react-native';
+import { Settings, Share2, Menu, LogIn } from 'lucide-react-native';
 import { Colors } from '@/constants/colors';
 import { MasonryList } from '@/components/MasonryList';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -63,7 +63,7 @@ function transformProductToNote(product: any, user: any): Note {
 export default function MeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { user, profile, refreshProfile, loading: authLoading } = useAuth();
+  const { user, profile, refreshProfile, loading } = useAuth();
   const [activeTab, setActiveTab] = useState('Notes');
 
   const [notes, setNotes] = useState<Note[]>([]);
@@ -109,7 +109,8 @@ export default function MeScreen() {
       ]);
 
       const realNotes = userNotes?.map(transformDBNote) || [];
-      const realProducts = userProducts?.map(p => transformProductToNote(p, profile || user)) || [];
+      const safeUser = profile || user || { id: 'unknown', username: 'Me', avatar_url: '' };
+      const realProducts = userProducts?.map(p => transformProductToNote(p, safeUser)) || [];
       const realCollections = userCollections?.map(transformDBNote) || [];
       const realLikes = userLikes?.map(transformDBNote) || [];
 
@@ -149,7 +150,6 @@ export default function MeScreen() {
     }
   };
 
-  // CORRECT ROUTING
   const handleItemPress = (item: Note) => {
       if (activeTab === 'Products') {
           router.push(`/product/${item.id}`);
@@ -285,9 +285,6 @@ export default function MeScreen() {
           <Pressable style={styles.editButton} onPress={() => router.push('/user/edit')}>
             <Text style={styles.editButtonText}>Edit Profile</Text>
           </Pressable>
-          <Pressable style={styles.editButton} onPress={handleShareProfile}>
-            <Text style={styles.editButtonText}>Share Profile</Text>
-          </Pressable>
         </View>
 
         <View style={styles.tabsRow}>
@@ -314,30 +311,7 @@ export default function MeScreen() {
 
   const displayData = getDisplayData();
 
-  
-  if (!authLoading && !user) {
-    return (
-      <View style={[styles.container, styles.center, { paddingTop: insets.top }]}>
-        <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: '#f0f0f0', justifyContent: 'center', alignItems: 'center', marginBottom: 16 }}>
-            <Menu size={32} color="#ccc" />
-        </View>
-        <Text style={{ fontSize: 24, fontWeight: 'bold', color: Colors.light.text, marginBottom: 8 }}>
-          Profile
-        </Text>
-        <Text style={{ fontSize: 16, color: '#666', textAlign: 'center', marginBottom: 24, paddingHorizontal: 32 }}>
-          Sign in to view your profile, collections, and stats
-        </Text>
-        <Pressable 
-          style={{ backgroundColor: Colors.light.tint, paddingHorizontal: 48, paddingVertical: 14, borderRadius: 24 }}
-          onPress={() => router.push('/auth/login')}
-        >
-          <Text style={{ color: '#fff', fontWeight: '600', fontSize: 16 }}>Sign In</Text>
-        </Pressable>
-      </View>
-    );
-  }
-
-  if (loading || (user && !profile)) {
+  if (loading) {
     return (
       <View style={[styles.container, styles.center]}>
         <ActivityIndicator size="large" color={Colors.light.tint} />
@@ -345,6 +319,26 @@ export default function MeScreen() {
     );
   }
 
+  // == GUEST VIEW ==
+  if (!user) {
+    return (
+      <View style={[styles.container, styles.authContainer]}>
+          <View style={styles.authIconContainer}>
+            <LogIn size={48} color={Colors.light.tint} />
+          </View>
+          <Text style={styles.authTitle}>Sign up for Pixo</Text>
+          <Text style={styles.authSubtitle}>Create a profile to follow accounts, like posts, and share your own.</Text>
+          
+          <Pressable style={styles.authButton} onPress={() => router.push('/auth/login')}>
+            <Text style={styles.authButtonText}>Log In</Text>
+          </Pressable>
+          
+          <Pressable style={styles.secondaryAuthButton} onPress={() => router.push('/auth/register')}>
+            <Text style={styles.secondaryAuthText}>Create Account</Text>
+          </Pressable>
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -386,4 +380,57 @@ const styles = StyleSheet.create({
   tabText: { fontSize: 15, color: '#999', fontWeight: '600' },
   activeTabText: { color: Colors.light.text, fontWeight: 'bold' },
   activeIndicator: { position: 'absolute', bottom: 0, width: 30, height: 2, backgroundColor: Colors.light.tint },
+  
+  // Auth / Guest Styles
+  authContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      paddingHorizontal: 40,
+  },
+  authIconContainer: {
+      width: 80,
+      height: 80,
+      borderRadius: 40,
+      backgroundColor: '#fff0f2', // Light tint background
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginBottom: 24,
+  },
+  authTitle: {
+      fontSize: 24,
+      fontWeight: 'bold',
+      color: Colors.light.text,
+      marginBottom: 12,
+  },
+  authSubtitle: {
+      fontSize: 16,
+      color: '#666',
+      textAlign: 'center',
+      marginBottom: 32,
+      lineHeight: 22,
+  },
+  authButton: {
+      backgroundColor: Colors.light.tint,
+      width: '100%',
+      paddingVertical: 16,
+      borderRadius: 30,
+      alignItems: 'center',
+      marginBottom: 16,
+  },
+  authButtonText: {
+      color: '#fff',
+      fontSize: 16,
+      fontWeight: 'bold',
+  },
+  secondaryAuthButton: {
+      paddingVertical: 16,
+      width: '100%',
+      alignItems: 'center',
+  },
+  secondaryAuthText: {
+      color: Colors.light.tint,
+      fontSize: 16,
+      fontWeight: '600',
+  }
 });

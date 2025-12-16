@@ -1,6 +1,6 @@
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter } from 'expo-router';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, TextInput, Pressable, Alert, ActivityIndicator, Animated } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TextInput, Pressable, Alert, ActivityIndicator, Animated, Keyboard, RefreshControl } from 'react-native';
 import { Search, Heart, X } from 'lucide-react-native';
 import { Colors } from '@/constants/colors';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -8,7 +8,7 @@ import { MOCK_PRODUCTS } from '@/mocks/data';
 import { ProductCard } from '@/components/ProductCard';
 import { Product } from '@/types';
 import { useCart } from '@/context/CartContext';
-import { getProducts } from '@/lib/database';
+import { getProducts, searchProducts } from '@/lib/database';
 
 export default function ShopScreen() {
   const insets = useSafeAreaInsets();
@@ -17,6 +17,8 @@ export default function ShopScreen() {
   const [products, setProducts] = useState<Product[]>([]);
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isSearching, setIsSearching] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const { count } = useCart();
   
   const scaleAnim = useRef(new Animated.Value(1)).current;
@@ -38,16 +40,16 @@ export default function ShopScreen() {
     }
   }, [count]);
 
-  // Use focus effect to reload data when navigating back to this tab
-  useFocusEffect(
-    useCallback(() => {
+  // Load products on mount
+  useEffect(() => {
+    if (!searchQuery) {
         loadProducts();
-    }, [])
-  );
+    }
+  }, []);
 
   const loadProducts = async () => {
     try {
-      // Don't show full loading spinner on re-focus if we already have data
+      // Only show full loading spinner if we have no data
       if (products.length === 0) setLoading(true);
       
       const data = await getProducts();
@@ -78,25 +80,66 @@ export default function ShopScreen() {
       }
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
-  const handleSearch = (query: string) => {
-    setSearchQuery(query);
-    if (query.trim()) {
-      const filtered = products.filter(p => 
-        p.title.toLowerCase().includes(query.toLowerCase()) ||
-        p.brandName?.toLowerCase().includes(query.toLowerCase())
-      );
-      setFilteredProducts(filtered);
-    } else {
-      setFilteredProducts(products);
+  const performSearch = async () => {
+    if (!searchQuery.trim()) {
+        setFilteredProducts(products);
+        return;
     }
+
+    setIsSearching(true);
+    Keyboard.dismiss();
+
+    try {
+        const data = await searchProducts(searchQuery);
+        
+        if (data && data.length > 0) {
+             const mappedProducts: Product[] = data.map((p: any) => ({
+                id: p.id,
+                brandId: p.brand_id || 'unknown',
+                title: p.title,
+                price: p.price,
+                image: p.image_url || p.image || 'https://via.placeholder.com/300', 
+                description: p.description || '',
+                brandName: p.brand_name || 'Generic',
+                brandLogo: p.brand_logo || '',
+                externalUrl: p.external_url
+              }));
+              setFilteredProducts(mappedProducts);
+        } else {
+            // Fallback to local filter if DB returns nothing (or for mock items)
+            const filtered = products.filter(p => 
+                p.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                p.brandName?.toLowerCase().includes(searchQuery.toLowerCase())
+            );
+            setFilteredProducts(filtered);
+        }
+    } catch (error) {
+        console.error("Search failed", error);
+        const filtered = products.filter(p => 
+            p.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            p.brandName?.toLowerCase().includes(searchQuery.toLowerCase())
+        );
+        setFilteredProducts(filtered);
+    } finally {
+        setIsSearching(false);
+    }
+  };
+
+  const handleTextChange = (text: string) => {
+      setSearchQuery(text);
+      if (text === '') {
+          setFilteredProducts(products);
+      }
   };
 
   const clearSearch = () => {
     setSearchQuery('');
     setFilteredProducts(products);
+    Keyboard.dismiss();
   };
 
   const handleSaleBannerPress = () => {
@@ -107,7 +150,16 @@ export default function ShopScreen() {
     router.push('/wishlist');
   };
 
-  if (loading) {
+  const onRefresh = () => {
+    setRefreshing(true);
+    if (searchQuery) {
+        performSearch();
+    } else {
+        loadProducts();
+    }
+  };
+
+  if (loading && !refreshing && products.length === 0) {
     return (
       <View style={[styles.container, styles.loadingContainer]}>
         <ActivityIndicator size="large" color={Colors.light.tint} />
@@ -125,7 +177,9 @@ export default function ShopScreen() {
             placeholder="Search products"
             placeholderTextColor="#999"
             value={searchQuery}
-            onChangeText={handleSearch}
+            onChangeText={handleTextChange}
+            onSubmitEditing={performSearch}
+            returnKeyType="search"
           />
           {searchQuery.length > 0 && (
             <Pressable onPress={clearSearch}>
@@ -145,25 +199,43 @@ export default function ShopScreen() {
         </Pressable>
       </View>
 
-      <FlatList
-        data={filteredProducts}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => <ProductCard product={item} />}
-        numColumns={2}
-        contentContainerStyle={styles.listContent}
-        columnWrapperStyle={styles.columnWrapper}
-        ListHeaderComponent={() => (
-          <Pressable style={styles.banner} onPress={handleSaleBannerPress}>
-             <Text style={styles.bannerTitle}>Summer Sale</Text>
-             <Text style={styles.bannerSubtitle}>Up to 50% off</Text>
-          </Pressable>
-        )}
-        ListEmptyComponent={() => (
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No products found</Text>
+      {isSearching ? (
+          <View style={styles.loadingContainer}>
+              <ActivityIndicator size="small" color={Colors.light.tint} />
           </View>
-        )}
-      />
+      ) : (
+          <FlatList
+            data={filteredProducts}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item }) => <ProductCard product={item} />}
+            numColumns={2}
+            contentContainerStyle={styles.listContent}
+            columnWrapperStyle={styles.columnWrapper}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+            }
+            ListHeaderComponent={() => (
+              <View>
+                {!searchQuery && (
+                    <Pressable style={styles.banner} onPress={handleSaleBannerPress}>
+                        <Text style={styles.bannerTitle}>Summer Sale</Text>
+                        <Text style={styles.bannerSubtitle}>Up to 50% off</Text>
+                    </Pressable>
+                )}
+                {searchQuery.length > 0 && (
+                    <Text style={styles.resultsText}>
+                        {filteredProducts.length} results for "{searchQuery}"
+                    </Text>
+                )}
+              </View>
+            )}
+            ListEmptyComponent={() => (
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyText}>No products found</Text>
+              </View>
+            )}
+          />
+      )}
     </View>
   );
 }
@@ -174,6 +246,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.light.background,
   },
   loadingContainer: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -257,4 +330,10 @@ const styles = StyleSheet.create({
     color: '#999',
     fontSize: 16,
   },
+  resultsText: {
+      fontSize: 14,
+      color: '#666',
+      marginBottom: 10,
+      marginLeft: 6,
+  }
 });
